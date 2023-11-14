@@ -6,8 +6,9 @@ import tsfel
 import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
 from zipfile import ZipFile
+from scipy.io import loadmat
 
-mpl.use('TkAgg')
+mpl.use('Qt5Agg')
 
 
 def create_df_data(start, dir_list):
@@ -136,6 +137,78 @@ def frames_from_au(subject, task):
     return AUs
 
 
-# frames_from_au(subject='F001', task='T1')
+def read_head_positions(subject, task):
+    """
+    Extracts head position data for specific frames from a MATLAB file.
+    """
+    path = r'X:\BP4D+_v0.2\2DFeatures'
+    bridge_path = f"{subject}_{task}.mat"
+    mat_path = os.path.join(path, bridge_path)
 
-select_image_files(subject='F001', task='T1')
+    if not os.path.exists(mat_path):
+        print(f"File does not exist: {mat_path}")
+        return None
+
+    try:
+        mat_data = loadmat(mat_path)
+        fit_data = mat_data['fit'][0]
+        selected_frames = frames_from_au(subject, task)[:, 0]
+        head_positions = [
+            [fit_data[i - 1][0], fit_data[i - 1][2]]
+            for i in selected_frames
+            if i - 1 < len(fit_data) and len(fit_data[i - 1][2]) != 0
+        ]
+    except FileNotFoundError:
+        print(f"File not found: {mat_path}")
+        return None
+    except KeyError:
+        print(f"'fit' data not found in the file: {mat_path}")
+        return None
+    except IndexError as e:
+        print(f"Index error: {e}")
+        return None
+    except Exception as e:
+        print(f"An error occurred: {e}")
+        return None
+
+    return head_positions
+
+
+def plot_head_position(subject, task):
+    head_position = read_head_positions(subject, task)
+    selected_images = 100
+    first_elements = []
+    second_elements = []
+    third_elements = []
+    size = []
+    # Iterate through the list and extract the elements
+    for array in head_position:
+        first_elements.append(array[1][0])
+        second_elements.append(array[1][1])
+        third_elements.append(array[1][2])
+        size.append(array[0][0])
+
+    # Convert lists to NumPy arrays if you want to perform array operations
+    first_elements = np.array(first_elements)
+    second_elements = np.array(second_elements)
+    third_elements = np.array(third_elements)
+
+    # Now plot the lines using matplotlib
+    plt.figure()
+
+    # Plot each set of elements. The x-values are just the index of each element.
+    plt.plot(size, first_elements, label='x-position')
+    plt.plot(size, second_elements, label='y-position')
+    plt.plot(size, third_elements, label='z-position')
+
+    # Adding labels and legend
+    plt.xlabel('Index')
+    plt.ylabel('Value')
+    plt.title('Plot of the First Three Elements in Each Array')
+    plt.legend()
+
+    # Show the plot
+    plt.show()
+
+
+plot_head_position("F001", "T6")
