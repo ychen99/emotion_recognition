@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
 from zipfile import ZipFile
 from scipy.io import loadmat
-
+import itertools
 mpl.use('Qt5Agg')
 
 
@@ -58,10 +58,10 @@ class PreProcessing:
     def spilt_in_windows(self, subject, task, window_size, overlap=0):
         signals = self.select_physiology_signal(subject, task)
         windows = []
-        print(signals)
         for signal_ in signals:
-            w = tsfel.signal_window_splitter(signal=signal_, window_size=window_size, overlap=overlap)
-            windows.append(w)
+            if signal_:
+                w = tsfel.signal_window_splitter(signal=signal_, window_size=window_size, overlap=overlap)
+                windows.append(w)
         windows_arr = np.array(windows)
         windows_arr = windows_arr.transpose(1,2,0)
 
@@ -87,20 +87,17 @@ class PreProcessing:
         try:
             with ZipFile(zip_path, 'r') as myzip:
                 # First, filter for only JPG files to reduce the dataset
-                jpg_files = [name for name in myzip.namelist() if name.endswith('.jpg')]
+                jpg_files = [name for name in myzip.namelist() if ( name.endswith('.jpg') and f'{task}/' in name)]
 
-            selected_frames = self.frames_from_au(subject, task)[:, 0]
-            selected_images = []
+            head_pos = self.read_head_positions(subject, task)
 
-            for selected_ in selected_frames:
-                # Substrings to check for each selected frame
-                substrings = [subject, task, f'{selected_}']
+            # Sublsit to check for each selected image with correct head positions
+            sublist = [selected_[0][0][0] for selected_ in head_pos]
 
-                # Filter list based on substrings for each frame
-                filtered_list = [s for s in jpg_files if all(sub in s for sub in substrings)]
-                selected_images.extend(filtered_list)
-            # print(selected_images)
-            return selected_images
+            # Filter list based on sublist for each frame
+            filtered_list = [s for s in jpg_files for sub in sublist if str(sub) in s]
+            #print(filtered_list)
+            return filtered_list
 
         except FileNotFoundError:
             print(f"File not found: {zip_path}")
@@ -271,7 +268,6 @@ class PreProcessing:
         frame_sequences = self.split_arithmetic_sequence(frames)
         sequence_locations = self.select_start_and_end(frame_sequences)
         physiology_signals = []
-
         for signal_name in signal_names:
             file_path = os.path.join(base_path, folder_path, f'{signal_name}.txt')
             try:
@@ -291,10 +287,7 @@ class PreProcessing:
 
         return physiology_signals
 
-
 method = PreProcessing('F001', 'T1')
-#method.select_physiology_signal(8F001', 'T8')
-method.spilt_in_windows('F042', 'T7', window_size=3000)
 
 
 def generate():
@@ -305,10 +298,19 @@ def generate():
     for id in subject_list:
         task_sequence = []
         for t in tasks:
-            sequence = method.spilt_in_windows(f'{id}', f'{t}', window_size=3000)
-            task_sequence.append(sequence)
+            try:
+                method = PreProcessing(f'{id}', f'{t}')
+                sequence = method.spilt_in_windows(f'{id}', f'{t}', window_size=3000)
+                task_sequence.append(sequence)
+            except Exception as e:
+                print(f"No such window data {id} and {t} : {e}")
+                continue
+
         _dataset.append(task_sequence)
 
-    print(len(_dataset), len(_dataset[0]), len(_dataset[0][0]), len(_dataset[0][0][0]))
+    x_train = list(itertools.chain(*list(itertools.chain(*_dataset))))
+    print(len(x_train), len(x_train[0]), len(x_train[0][0]))
+    return x_train
+
 
 # generate()
