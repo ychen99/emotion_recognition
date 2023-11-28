@@ -8,6 +8,8 @@ from sklearn.model_selection import train_test_split
 from zipfile import ZipFile
 from scipy.io import loadmat
 import itertools
+from PIL import Image
+
 mpl.use('Qt5Agg')
 
 
@@ -55,21 +57,21 @@ class PreProcessing:
 
         return result_data
 
-    def spilt_in_windows(self, subject, task, window_size, overlap=0):
-        signals = self.select_physiology_signal(subject, task)
+    def spilt_in_windows(self, window_size, overlap=0):
+        signals = self.select_physiology_signal(self.subject, self.task)
         windows = []
         for signal_ in signals:
             if signal_:
                 w = tsfel.signal_window_splitter(signal=signal_, window_size=window_size, overlap=overlap)
                 windows.append(w)
         windows_arr = np.array(windows)
-        windows_arr = windows_arr.transpose(1,2,0)
+        windows_arr = windows_arr.transpose(1, 2, 0)
 
-        print(windows_arr.shape, f'?{subject} and {task}')
+        print(windows_arr.shape, f'?{self.subject} and {self.task}')
 
         return windows_arr
 
-    def select_image_files(self, subject, task):
+    def select_image_files(self):
         """
             Selects specific image files from a ZIP archive based on the subject, task, and frame numbers.
 
@@ -81,22 +83,22 @@ class PreProcessing:
             list: A list of filtered image file paths.
             """
         path = r'X:\BP4D+_v0.2\2D+3D'
-        end = f'{subject}.zip'
+        end = f'{self.subject}.zip'
         zip_path = os.path.join(path, end)
 
         try:
             with ZipFile(zip_path, 'r') as myzip:
                 # First, filter for only JPG files to reduce the dataset
-                jpg_files = [name for name in myzip.namelist() if ( name.endswith('.jpg') and f'{task}/' in name)]
+                jpg_files = [name for name in myzip.namelist() if (name.endswith('.jpg') and f'{self.task}/' in name)]
 
-            head_pos = self.read_head_positions(subject, task)
+            head_pos = self.read_feeature_head_positions()
 
             # Sublsit to check for each selected image with correct head positions
             sublist = [selected_[0][0][0] for selected_ in head_pos]
 
             # Filter list based on sublist for each frame
             filtered_list = [s for s in jpg_files for sub in sublist if str(sub) in s]
-            #print(filtered_list)
+
             return filtered_list
 
         except FileNotFoundError:
@@ -106,7 +108,7 @@ class PreProcessing:
             print(f"An error occurred: {e}")
             return []
 
-    def frames_from_au(self, subject, task):
+    def frames_from_au(self):
         """
         Extracts and merges the second column of Action Unit (AU) data from multiple files,
         corresponding to a given subject and task. Places the first column (which is the same
@@ -121,7 +123,7 @@ class PreProcessing:
         """
         path = r'X:\BP4D+_v0.2\AUCoding\AU_INT'
         dir_list = os.listdir(path)
-        name = f'{subject}_{task}_'
+        name = f'{self.subject}_{self.task}_'
         aus = []
         column = None
 
@@ -147,12 +149,12 @@ class PreProcessing:
         AUs = np.array(aus).T
         return AUs
 
-    def read_head_positions(self, subject, task):
+    def read_feeature_head_positions(self):
         """
         Extracts head position data for specific frames from a MATLAB file.
         """
         path = r'X:\BP4D+_v0.2\2DFeatures'
-        bridge_path = f"{subject}_{task}.mat"
+        bridge_path = f"{self.subject}_{self.task}.mat"
         mat_path = os.path.join(path, bridge_path)
 
         if not os.path.exists(mat_path):
@@ -162,9 +164,9 @@ class PreProcessing:
         try:
             mat_data = loadmat(mat_path)
             fit_data = mat_data['fit'][0]
-            selected_frames = self.frames_from_au(subject, task)[:, 0]
+            selected_frames = self.frames_from_au()[:, 0]
             head_positions = [
-                [fit_data[i - 1][0], fit_data[i - 1][2]]
+                [fit_data[i - 1][0], fit_data[i - 1][1], fit_data[i - 1][2]]
                 for i in selected_frames
                 if i - 1 < len(fit_data) and len(fit_data[i - 1][2]) != 0
             ]
@@ -183,8 +185,8 @@ class PreProcessing:
 
         return head_positions
 
-    def plot_head_position(self, subject, task):
-        head_position = self.read_head_positions(subject, task)
+    def plot_head_position(self):
+        head_position = self.read_feeature_head_positions()
         selected_images = 100
         first_elements = []
         second_elements = []
@@ -213,7 +215,7 @@ class PreProcessing:
         # Adding labels and legend
         plt.xlabel('Index')
         plt.ylabel('Value')
-        plt.title(f'The head position of {subject} for the task {task}')
+        plt.title(f'The head position of {self.subject} for the task {self.task}')
         plt.legend()
 
         # Show the plot
@@ -252,17 +254,17 @@ class PreProcessing:
             location.append((start, end))
         return location
 
-    def select_physiology_signal(self, subject, task, sample=1000, fps=25):
+    def select_physiology_signal(self, sample=1000, fps=25):
         base_path = r'X:\BP4D+_v0.2\Physiology'
-        folder_path = f'{subject}/{task}'
+        folder_path = f'{self.subject}/{self.task}'
         signal_names = ['BP Dia_mmHg', 'BP_mmHg', 'EDA_microsiemens', 'LA Mean BP_mmHg', 'LA Systolic BP_mmHg',
                         'Pulse Rate_BPM',
                         'Resp_Volts', 'Respiration Rate_BPM']
 
-        head_positions = self.read_head_positions(subject, task)
+        head_positions = self.read_head_positions()
         frames = []
         for a in head_positions:
-            m = (a[0][0] / fps) * sample
+            m = (a[0][0][0] / fps) * sample
             frames.append(m[0])
 
         frame_sequences = self.split_arithmetic_sequence(frames)
@@ -287,7 +289,8 @@ class PreProcessing:
 
         return physiology_signals
 
-method = PreProcessing('F001', 'T1')
+
+#method = PreProcessing('F001', 'T1')
 
 
 def generate():
@@ -300,7 +303,7 @@ def generate():
         for t in tasks:
             try:
                 method = PreProcessing(f'{id}', f'{t}')
-                sequence = method.spilt_in_windows(f'{id}', f'{t}', window_size=3000)
+                sequence = method.spilt_in_windows(window_size=3000)
                 task_sequence.append(sequence)
             except Exception as e:
                 print(f"No such window data {id} and {t} : {e}")
@@ -311,6 +314,5 @@ def generate():
     x_train = list(itertools.chain(*list(itertools.chain(*_dataset))))
     print(len(x_train), len(x_train[0]), len(x_train[0][0]))
     return x_train
-
 
 # generate()
