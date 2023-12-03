@@ -153,7 +153,7 @@ class PreProcessing:
         """
         Extracts head position data for specific frames from a MATLAB file.
         """
-        path = r'X:\BP4D+_v0.2\2DFeatures'
+        path = r'X:\BP4D+_v0.2\3DFeatures'
         bridge_path = f"{self.subject}_{self.task}.mat"
         mat_path = os.path.join(path, bridge_path)
 
@@ -163,13 +163,20 @@ class PreProcessing:
 
         try:
             mat_data = loadmat(mat_path)
-            fit_data = mat_data['fit'][0]
+            fit_data = mat_data['stereo'][0]
             selected_frames = self.frames_from_au()[:, 0]
+
+            def calculate_column_averages(col_data):
+                return [sum(column) / len(column) for column in zip(*col_data)]
+
             head_positions = [
                 [fit_data[i - 1][0], fit_data[i - 1][1], fit_data[i - 1][2]]
                 for i in selected_frames
-                if i - 1 < len(fit_data) and len(fit_data[i - 1][2]) != 0
+                if i - 1 < len(fit_data) and len(fit_data[i - 1][2]) != 0 and
+                   all(value < 22 * average for value, average in
+                       zip(fit_data[i - 1][2], calculate_column_averages(fit_data[i - 1][2])))
             ]
+
         except FileNotFoundError:
             print(f"File not found: {mat_path}")
             return None
@@ -187,16 +194,16 @@ class PreProcessing:
 
     def plot_head_position(self):
         head_position = self.read_feeature_head_positions()
-        selected_images = 100
         first_elements = []
         second_elements = []
         third_elements = []
         size = []
+
         # Iterate through the list and extract the elements
         for array in head_position:
-            first_elements.append(array[1][0])
-            second_elements.append(array[1][1])
-            third_elements.append(array[1][2])
+            first_elements.append(array[2][0])
+            second_elements.append(array[2][1])
+            third_elements.append(array[2][2])
             size.append(array[0][0])
 
         # Convert lists to NumPy arrays if you want to perform array operations
@@ -204,7 +211,7 @@ class PreProcessing:
         second_elements = np.array(second_elements)
         third_elements = np.array(third_elements)
 
-        # Now plot the lines using matplotlib
+        # Plot the lines using matplotlib
         plt.figure()
 
         # Plot each set of elements. The x-values are just the index of each element.
@@ -213,7 +220,7 @@ class PreProcessing:
         plt.plot(size, third_elements, label='z-position')
 
         # Adding labels and legend
-        plt.xlabel('Index')
+        plt.xlabel('Nr. of frame')
         plt.ylabel('Value')
         plt.title(f'The head position of {self.subject} for the task {self.task}')
         plt.legend()
@@ -290,7 +297,8 @@ class PreProcessing:
         return physiology_signals
 
 
-#method = PreProcessing('F001', 'T1')
+method = PreProcessing('F001', 'T8')
+#method.read_feeature_head_positions()
 
 
 def generate():
