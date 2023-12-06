@@ -58,7 +58,7 @@ class PreProcessing:
         return result_data
 
     def spilt_in_windows(self, window_size, overlap=0):
-        signals = self.select_physiology_signal(self.subject, self.task)
+        signals = self.select_physiology_signal()
         windows = []
         for signal_ in signals:
             if signal_:
@@ -91,7 +91,7 @@ class PreProcessing:
                 # First, filter for only JPG files to reduce the dataset
                 jpg_files = [name for name in myzip.namelist() if (name.endswith('.jpg') and f'{self.task}/' in name)]
 
-            head_pos = self.read_feeature_head_positions()
+            head_pos = self.read_feature_head_positions()
 
             # Sublsit to check for each selected image with correct head positions
             sublist = [selected_[0][0][0] for selected_ in head_pos]
@@ -149,7 +149,7 @@ class PreProcessing:
         AUs = np.array(aus).T
         return AUs
 
-    def read_feeature_head_positions(self):
+    def read_feature_head_positions(self):
         """
         Extracts head position data for specific frames from a MATLAB file.
         """
@@ -193,7 +193,7 @@ class PreProcessing:
         return head_positions
 
     def plot_head_position(self):
-        head_position = self.read_feeature_head_positions()
+        head_position = self.read_feature_head_positions()
         first_elements = []
         second_elements = []
         third_elements = []
@@ -215,9 +215,9 @@ class PreProcessing:
         plt.figure()
 
         # Plot each set of elements. The x-values are just the index of each element.
-        plt.plot(size, first_elements, label='x-position')
-        plt.plot(size, second_elements, label='y-position')
-        plt.plot(size, third_elements, label='z-position')
+        plt.plot(size, first_elements, label='pitch')
+        plt.plot(size, second_elements, label='yaw')
+        plt.plot(size, third_elements, label='roll')
 
         # Adding labels and legend
         plt.xlabel('Nr. of frame')
@@ -264,16 +264,14 @@ class PreProcessing:
     def select_physiology_signal(self, sample=1000, fps=25):
         base_path = r'X:\BP4D+_v0.2\Physiology'
         folder_path = f'{self.subject}/{self.task}'
-        signal_names = ['BP Dia_mmHg', 'BP_mmHg', 'EDA_microsiemens', 'LA Mean BP_mmHg', 'LA Systolic BP_mmHg',
-                        'Pulse Rate_BPM',
-                        'Resp_Volts', 'Respiration Rate_BPM']
+        signal_names = ['BP Dia_mmHg', 'BP_mmHg', 'EDA_microsiemens', 'LA Mean BP_mmHg',
+                        'LA Systolic BP_mmHg', 'Pulse Rate_BPM', 'Resp_Volts', 'Respiration Rate_BPM']
 
-        head_positions = self.read_head_positions()
+        head_positions = self.read_feature_head_positions()
         frames = []
         for a in head_positions:
-            m = (a[0][0][0] / fps) * sample
-            frames.append(m[0])
-
+            m = (a[0][0][0] / int(fps)) * int(sample)
+            frames.append(m)
         frame_sequences = self.split_arithmetic_sequence(frames)
         sequence_locations = self.select_start_and_end(frame_sequences)
         physiology_signals = []
@@ -297,8 +295,8 @@ class PreProcessing:
         return physiology_signals
 
 
-method = PreProcessing('F001', 'T8')
-#method.read_feeature_head_positions()
+method = PreProcessing('F001', 'T1')
+# method.plot_head_position()
 
 
 def generate():
@@ -320,7 +318,6 @@ def generate():
         _dataset.append(task_sequence)
 
     x_train = list(itertools.chain(*list(itertools.chain(*_dataset))))
-    print(len(x_train), len(x_train[0]), len(x_train[0][0]))
+
     return x_train
 
-# generate()
