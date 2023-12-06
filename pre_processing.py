@@ -67,7 +67,7 @@ class PreProcessing:
         windows_arr = np.array(windows)
         windows_arr = windows_arr.transpose(1, 2, 0)
 
-        print(windows_arr.shape, f'?{self.subject} and {self.task}')
+        # print(windows_arr.shape, f'?{self.subject} and {self.task}')
 
         return windows_arr
 
@@ -153,7 +153,7 @@ class PreProcessing:
         """
         Extracts head position data for specific frames from a MATLAB file.
         """
-        path = r'X:\BP4D+_v0.2\3DFeatures'
+        path = r'X:\BP4D+_v0.2\2DFeatures'
         bridge_path = f"{self.subject}_{self.task}.mat"
         mat_path = os.path.join(path, bridge_path)
 
@@ -163,20 +163,20 @@ class PreProcessing:
 
         try:
             mat_data = loadmat(mat_path)
-            fit_data = mat_data['stereo'][0]
+            fit_data = mat_data['fit'][0]
             selected_frames = self.frames_from_au()[:, 0]
 
             def calculate_column_averages(col_data):
-                return [sum(column) / len(column) for column in zip(*col_data)]
+                return np.mean(col_data, axis=0)
+            all_head_pos = np.array(
+                [fit_data[i - 1][2] for i in selected_frames if i-1 < len(fit_data) and len(fit_data[i - 1][2]) != 0])
+            ave = calculate_column_averages(all_head_pos)
 
-            head_positions = [
-                [fit_data[i - 1][0], fit_data[i - 1][1], fit_data[i - 1][2]]
-                for i in selected_frames
-                if i - 1 < len(fit_data) and len(fit_data[i - 1][2]) != 0 and
-                   all(value < 22 * average for value, average in
-                       zip(fit_data[i - 1][2], calculate_column_averages(fit_data[i - 1][2])))
-            ]
-
+            head_positions = []
+            for i in selected_frames:
+                if i - 1 < len(fit_data) and len(fit_data[i - 1][2]) != 0:
+                    if np.all(np.abs(fit_data[i - 1][2]) < 20 * np.abs(ave)):
+                        head_positions.append([fit_data[i - 1][0], fit_data[i - 1][1], fit_data[i - 1][2]])
         except FileNotFoundError:
             print(f"File not found: {mat_path}")
             return None
@@ -189,7 +189,6 @@ class PreProcessing:
         except Exception as e:
             print(f"An error occurred: {e}")
             return None
-
         return head_positions
 
     def plot_head_position(self):
@@ -221,7 +220,7 @@ class PreProcessing:
 
         # Adding labels and legend
         plt.xlabel('Nr. of frame')
-        plt.ylabel('Value')
+        plt.ylabel('Degree')
         plt.title(f'The head position of {self.subject} for the task {self.task}')
         plt.legend()
 
@@ -295,8 +294,10 @@ class PreProcessing:
         return physiology_signals
 
 
-method = PreProcessing('F001', 'T1')
+method = PreProcessing('F078', 'T7')
 # method.plot_head_position()
+#method.spilt_in_windows(window_size=3000)
+#method.read_feature_head_positions()
 
 
 def generate():
@@ -309,7 +310,7 @@ def generate():
         for t in tasks:
             try:
                 method = PreProcessing(f'{id}', f'{t}')
-                sequence = method.spilt_in_windows(window_size=3000)
+                sequence = method.spilt_in_windows(window_size=2000)
                 task_sequence.append(sequence)
             except Exception as e:
                 print(f"No such window data {id} and {t} : {e}")
