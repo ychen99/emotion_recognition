@@ -21,18 +21,17 @@ from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 
 
-def feature_extraction_phy(X):
-    # X_train = pre.generate()
+def feature_extraction_phy():
+    X_train = pre.generate()
     name = ['BP Dia_mmHg', 'BP_mmHg', 'EDA_microsiemens', 'LA Mean BP_mmHg', 'LA Systolic BP_mmHg',
-            'Pulse Rate_BPM',
-            'Resp_Volts', 'Respiration Rate_BPM']
-    cfg_file = tsfel.get_features_by_domain('spectral')
-    features = tsfel.time_series_features_extractor(cfg_file, X, header_names=name)
-    print(features.columns, features)
+            'Pulse Rate_BPM', 'Resp_Volts', 'Respiration Rate_BPM']
+    cfg_file = tsfel.get_features_by_domain('temporal')
+    features = tsfel.time_series_features_extractor(cfg_file, X_train, header_names=name, fs=1000)
+    pd.set_option('display.max_seq_items', None)
+    print(features.shape)
 
 
-# X_train = pre.generate()
-# feature_extraction_phy(X_train)
+# feature_extraction_phy()
 
 
 def plot_face_blendshapes_bar_graph(face_blendshapes):
@@ -96,17 +95,16 @@ def draw_landmarks_on_image(rgb_image, detection_result):
     return annotated_image
 
 
-def image_process(subject, task, i=107):
+def image_process(subject, task, image_index):
     methods = pre.PreProcessing(f'{subject}', f'{task}')
     path = r'X:\BP4D+_v0.2\2D+3D'
     end = f'{subject}.zip'
     image_names = methods.select_image_files()
-
     # Path to ZIP file
     zip_file_path = os.path.join(path, end)
-
     # Specific path to the JPEG file inside the ZIP
-    jpeg_file_path = image_names[109]
+
+    jpeg_file_path = image_names[image_index]
 
     with zipfile.ZipFile(zip_file_path, 'r') as zip_ref:
         # Check if the desired file exists in the ZIP
@@ -131,8 +129,8 @@ def image_process(subject, task, i=107):
 
                 # plot_face_blendshapes_bar_graph(detection_result.face_blendshapes[0])
 
-                #plt.imshow(annotated_image)
-                #plt.show()
+                # plt.imshow(annotated_image)
+                # plt.show()
 
     return img, landmark_indics, annotated_image
 
@@ -185,12 +183,12 @@ def image_segmentation(image, land_index):
     cropped_images.append(crop_image(image, first_bound))
     cropped_images.append(crop_image(image, second_bound))
     cropped_images.append(crop_image(image, third_bound))
-    print(cropped_images)
+
     return cropped_images
 
 
-def plot_image(subject, task):
-    original_image, landmark_indics, annoted_img = image_process(subject, task)
+def plot_image(subject, task, index):
+    original_image, landmark_indics, annoted_img = image_process(subject, task, index)
     cropped_images = image_segmentation(original_image, landmark_indics)
     fig = plt.figure(figsize=(14, 6))
 
@@ -225,69 +223,117 @@ def plot_image(subject, task):
     plt.show()
 
 
-
-
-
-def feature_extraction_hog(subject, task):
-    _, input_img, resized_img = image_process(subject, task)
-
+def feature_extraction_hog(subject, task, index):
+    original_img, landmark_indic, _ = image_process(subject, task, index)
+    segmented_images = image_segmentation(original_img, landmark_indic)
     numbins = 9
-    pix_per_cell = (8, 8)
+    pix_per_cell = (16, 16)
     cell_per_block = (2, 2)
+    resized_segmentations = resize_img(segmented_images)
 
-    fd, hog_img = hog(resized_img, orientations=numbins, pixels_per_cell=pix_per_cell,
-                      cells_per_block=cell_per_block, visualize=True, channel_axis=2)
+    def get_ori_hog(segmentation):
+        fd, hog_img = hog(segmentation, orientations=numbins, pixels_per_cell=pix_per_cell,
+                          cells_per_block=cell_per_block, visualize=True, channel_axis=2)
+        hog_image_rescaled = exposure.rescale_intensity(hog_img, in_range=(0, 10))
+        fd_list = list(fd)
+        return fd_list, hog_image_rescaled
 
-    fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(10, 6), sharex=True, sharey=True)
+    def plot_all_segments(segment_images, idx):
+        seg = segment_images[idx]
+        fd, hog = get_ori_hog(seg)
+        plot_feature_subset(seg, hog, fd)
+
+    #plot_all_segments(segmented_images, 1)
+
+    features_hog = []
+    for i in range(3):
+        feature_hog, _ = get_ori_hog(segmented_images[i])
+        features_hog.append(feature_hog)
+    # features = np.array(features_hog)
+    return features_hog
+
+
+def plot_feature_subset(seg, hog, fd):
+    fig = plt.figure(figsize=(10, 6))
+    ax1 = fig.add_subplot(2, 2, 1)
+    ax2 = fig.add_subplot(2, 2, 3)
+    ax3 = fig.add_subplot(1, 2, 2)
 
     ax1.axis('off')
-    ax1.imshow(input_img, cmap=plt.cm.gray)
+    ax1.imshow(seg, cmap=plt.cm.gray)
     ax1.set_title('Input image')
 
     ax2.axis('off')
-    ax2.imshow(resized_img, cmap=plt.cm.gray)
-    ax2.set_title('Cropped image')
+    ax2.imshow(hog, cmap=plt.cm.gray)
+    ax2.set_title('HOG')
 
-    # Rescale histogram for better display
-    hog_image_rescaled = exposure.rescale_intensity(hog_img, in_range=(0, 10))
+    ax3.hist(fd, bins=9, alpha=0.75)
+    ax3.set_xlabel('Orientation Bins')
+    ax3.set_ylabel('Frequency')
+    ax3.set_title('Histogram of HOG')
 
-    ax3.axis('off')
-    ax3.imshow(hog_image_rescaled, cmap=plt.cm.gray)
-    ax3.set_title('Histogram of Oriented Gradients')
-
+    plt.tight_layout()
     plt.show()
-    print(fd, fd.shape)
 
 
 # local binary patterns
-def feature_extraction_lbp(subject, task):
-    image, input_img, resized_img = image_process(subject, task)
-    image_gray = color.rgb2gray(resized_img)
-    METHOD = 'uniform'
+def feature_extraction_lbp(subject, task, index):
+    original_img, landmark_indic, _ = image_process(subject, task, index)
 
-    radius = 3
-    n_points = 8 * radius
-    lbp = local_binary_pattern(image_gray, n_points, radius, METHOD)
+    segmented_images = image_segmentation(original_img, landmark_indic)
+    resized_segmentations = resize_img(segmented_images)
+
+    def cal_lbp(segment_images, idx):
+        # int_image = np.round(segment_images[idx] * 255).astype(np.uint8)
+        image_gray = color.rgb2gray(segment_images[idx])
+        image_gray_int = np.round(image_gray * 255).astype(np.uint8)
+        METHOD = 'uniform'
+        radius = 3
+        n_points = 8 * radius
+
+        lbp = local_binary_pattern(image_gray_int, n_points, radius, METHOD)
+        lbp_flat = lbp.flatten()
+        lbp_list = list(lbp_flat)
+        return lbp_list
 
     def hist(ax, lbp):
         n_bins = int(lbp.max() + 1)
         return ax.hist(lbp.ravel(), density=True, bins=n_bins, range=(0, n_bins),
                        facecolor='0.5')
 
-    # plot histograms of LBP of textures
-    fig, (ax1, ax2, ax3) = plt.subplots(nrows=1, ncols=3, figsize=(20, 6))
-    plt.gray()
-    ax1.imshow(resized_img, cmap='gray')
-    ax1.set_title('Original Image')
-    ax1.axis('off')
+    def plot_lbp_hist(segment_images, idx):
+        lbp = cal_lbp(segment_images, idx)
 
-    ax2.imshow(lbp, cmap='gray')
-    ax2.set_title('LBP Image')
-    ax2.axis('off')
+        fig, (ax1, ax2, ax3) = plt.subplots(nrows=1, ncols=3, figsize=(10, 6))
+        plt.gray()
+        ax1.imshow(segment_images[idx], cmap='gray')
+        ax1.set_title('Original Image')
+        ax1.axis('off')
 
-    hist(ax3, lbp)
-    ax3.set_ylabel('Percentage')
+        ax2.imshow(lbp, cmap='gray')
+        ax2.set_title('LBP Image')
+        ax2.axis('off')
 
-    plt.show()
+        hist(ax3, lbp)
+        ax3.set_ylabel('Percentage')
 
-# feature_extraction_hog('F001', 'T1')
+        plt.tight_layout()
+        plt.show()
+
+    # plot_lbp_hist(segmented_images, 2)
+    features_lbp = []
+    for i in range(3):
+        feature_lbp = cal_lbp(segmented_images, i)
+        features_lbp.append(feature_lbp)
+    return features_lbp
+
+
+def resize_img(images):
+    resized_images = []
+    for i in range(3):
+        resized_images.append(cv2.resize(images[i], (256, 128)))
+    return resized_images
+
+
+# plot_image('F001', 'T1')
+

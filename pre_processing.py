@@ -9,6 +9,7 @@ from zipfile import ZipFile
 from scipy.io import loadmat
 import itertools
 from PIL import Image
+import re
 
 mpl.use('Qt5Agg')
 
@@ -97,9 +98,10 @@ class PreProcessing:
             sublist = [selected_[0][0][0] for selected_ in head_pos]
 
             # Filter list based on sublist for each frame
-            filtered_list = [s for s in jpg_files for sub in sublist if str(sub) in s]
+            filtered_list = [s for s in jpg_files if any(re.search(r'/0*' + str(sub) + r'\.', s) for sub in sublist)]
+            filtered = list(dict.fromkeys(filtered_list))
+            return filtered
 
-            return filtered_list
 
         except FileNotFoundError:
             print(f"File not found: {zip_path}")
@@ -167,15 +169,15 @@ class PreProcessing:
             selected_frames = self.frames_from_au()[:, 0]
 
             def calculate_column_averages(col_data):
-                return np.mean(col_data, axis=0)
-            all_head_pos = np.array(
-                [fit_data[i - 1][2] for i in selected_frames if i-1 < len(fit_data) and len(fit_data[i - 1][2]) != 0])
-            ave = calculate_column_averages(all_head_pos)
+                return np.median(col_data, axis=0)
 
+            all_head_pos = np.array(
+                [fit_data[i - 1][2] for i in selected_frames if i - 1 < len(fit_data) and len(fit_data[i - 1][2]) != 0])
+            ave = calculate_column_averages(all_head_pos)
             head_positions = []
             for i in selected_frames:
                 if i - 1 < len(fit_data) and len(fit_data[i - 1][2]) != 0:
-                    if np.all(np.abs(fit_data[i - 1][2]) < 20 * np.abs(ave)):
+                    if np.all(np.abs(fit_data[i - 1][2]) < 60 * np.abs(ave)):
                         head_positions.append([fit_data[i - 1][0], fit_data[i - 1][1], fit_data[i - 1][2]])
         except FileNotFoundError:
             print(f"File not found: {mat_path}")
@@ -189,20 +191,32 @@ class PreProcessing:
         except Exception as e:
             print(f"An error occurred: {e}")
             return None
+        '''
+        for i in range(len(head_positions)):
+            print(head_positions[i][0][0])
+        '''
         return head_positions
 
     def plot_head_position(self):
-        head_position = self.read_feature_head_positions()
+        path = r'X:\BP4D+_v0.2\2DFeatures'
+        bridge_path = f"{self.subject}_{self.task}.mat"
+        mat_path = os.path.join(path, bridge_path)
+        mat_data = loadmat(mat_path)
+        fit_data = mat_data['fit'][0]
         first_elements = []
         second_elements = []
         third_elements = []
         size = []
 
+        selected_frames = self.frames_from_au()[:, 0]
+        all_head_pos = [[fit_data[i - 1][0], fit_data[i - 1][2]] for i in selected_frames if
+                        i - 1 < len(fit_data) and len(fit_data[i - 1][2]) != 0]
+
         # Iterate through the list and extract the elements
-        for array in head_position:
-            first_elements.append(array[2][0])
-            second_elements.append(array[2][1])
-            third_elements.append(array[2][2])
+        for array in all_head_pos:
+            first_elements.append(array[1][0])
+            second_elements.append(array[1][1])
+            third_elements.append(array[1][2])
             size.append(array[0][0])
 
         # Convert lists to NumPy arrays if you want to perform array operations
@@ -294,10 +308,11 @@ class PreProcessing:
         return physiology_signals
 
 
-method = PreProcessing('F078', 'T7')
-# method.plot_head_position()
-#method.spilt_in_windows(window_size=3000)
-#method.read_feature_head_positions()
+method = PreProcessing('F001', 'T8')
+method.select_image_files()
+
+
+# method.spilt_in_windows(window_size=3000)
 
 
 def generate():
@@ -321,4 +336,3 @@ def generate():
     x_train = list(itertools.chain(*list(itertools.chain(*_dataset))))
 
     return x_train
-
