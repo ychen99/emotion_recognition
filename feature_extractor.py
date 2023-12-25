@@ -229,7 +229,6 @@ def feature_extraction_hog(subject, task, index):
     numbins = 9
     pix_per_cell = (16, 16)
     cell_per_block = (2, 2)
-    resized_segmentations = resize_img(segmented_images)
 
     def get_ori_hog(segmentation):
         fd, hog_img = hog(segmentation, orientations=numbins, pixels_per_cell=pix_per_cell,
@@ -238,8 +237,8 @@ def feature_extraction_hog(subject, task, index):
         fd_list = list(fd)
         return fd_list, hog_image_rescaled
 
-    def plot_all_segments(segment_images, idx):
-        seg = segment_images[idx]
+    def plot_all_segments(segment_images, n):
+        seg = segment_images[n]
         fd, hog = get_ori_hog(seg)
         plot_feature_subset(seg, hog, fd)
 
@@ -281,7 +280,6 @@ def feature_extraction_lbp(subject, task, index):
     original_img, landmark_indic, _ = image_process(subject, task, index)
 
     segmented_images = image_segmentation(original_img, landmark_indic)
-    resized_segmentations = resize_img(segmented_images)
 
     def cal_lbp(segment_images, idx):
         # int_image = np.round(segment_images[idx] * 255).astype(np.uint8)
@@ -335,5 +333,5 @@ def resize_img(images):
     return resized_images
 
 
-# plot_image('F001', 'T1')
-
+#feature_extraction_hog('F019', 'T8', 109)
+# print(feature_extraction_lbp('F019','T8',109))

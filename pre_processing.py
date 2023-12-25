@@ -68,8 +68,6 @@ class PreProcessing:
         windows_arr = np.array(windows)
         windows_arr = windows_arr.transpose(1, 2, 0)
 
-        # print(windows_arr.shape, f'?{self.subject} and {self.task}')
-
         return windows_arr
 
     def select_image_files(self):
@@ -308,12 +306,9 @@ class PreProcessing:
         return physiology_signals
 
 
-method = PreProcessing('F001', 'T8')
-method.select_image_files()
-
-
 # method.spilt_in_windows(window_size=3000)
-
+#obj = PreProcessing('F019','T8')
+#print(obj.select_image_files()[109])
 
 def generate():
     tasks = ['T1', 'T6', 'T7', 'T8']
@@ -324,8 +319,8 @@ def generate():
         task_sequence = []
         for t in tasks:
             try:
-                method = PreProcessing(f'{id}', f'{t}')
-                sequence = method.spilt_in_windows(window_size=2000)
+                me = PreProcessing(f'{id}', f'{t}')
+                sequence = me.spilt_in_windows(window_size=2000)
                 task_sequence.append(sequence)
             except Exception as e:
                 print(f"No such window data {id} and {t} : {e}")
