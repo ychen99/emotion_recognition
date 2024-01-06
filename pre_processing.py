@@ -10,6 +10,7 @@ from scipy.io import loadmat
 import itertools
 from PIL import Image
 import re
+from scipy.signal import firwin, lfilter
 
 mpl.use('Qt5Agg')
 
@@ -307,27 +308,31 @@ class PreProcessing:
 
 
 # method.spilt_in_windows(window_size=3000)
-#obj = PreProcessing('F019','T8')
-#print(obj.select_image_files()[109])
+#obj = PreProcessing('F042','T8')
+#print(obj.read_feature_head_positions())
 
 def generate():
     tasks = ['T1', 'T6', 'T7', 'T8']
     file_start = r"X:\BP4D+_v0.2\Physiology"
     subject_list = os.listdir(file_start)
     _dataset = []
+    labels = []
     for id in subject_list:
         task_sequence = []
         for t in tasks:
             try:
                 me = PreProcessing(f'{id}', f'{t}')
-                sequence = me.spilt_in_windows(window_size=2000)
+                sequence = me.spilt_in_windows(window_size=2000) # (id, window, 8)
                 task_sequence.append(sequence)
+                labels.append([t] * len(sequence))
             except Exception as e:
                 print(f"No such window data {id} and {t} : {e}")
                 continue
-
         _dataset.append(task_sequence)
 
-    x_train = list(itertools.chain(*list(itertools.chain(*_dataset))))
+    x_data = list(itertools.chain(*list(itertools.chain(*_dataset))))
+    label_list = list(itertools.chain(*labels))
 
-    return x_train
+    return x_data, label_list
+
+# generate()

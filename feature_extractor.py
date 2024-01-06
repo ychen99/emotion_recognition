@@ -1,3 +1,4 @@
+import itertools
 import os.path
 import cv2
 import math
@@ -22,16 +23,21 @@ from mediapipe.tasks.python import vision
 
 
 def feature_extraction_phy():
-    X_train = pre.generate()
+    X_train, labels = pre.generate()
     name = ['BP Dia_mmHg', 'BP_mmHg', 'EDA_microsiemens', 'LA Mean BP_mmHg', 'LA Systolic BP_mmHg',
             'Pulse Rate_BPM', 'Resp_Volts', 'Respiration Rate_BPM']
-    cfg_file = tsfel.get_features_by_domain('temporal')
+    cfg_file = tsfel.get_features_by_domain()
     features = tsfel.time_series_features_extractor(cfg_file, X_train, header_names=name, fs=1000)
     pd.set_option('display.max_seq_items', None)
-    print(features.shape)
+    #print(features.shape)
+    df_data = pd.DataFrame(features)
+    df_label = pd.DataFrame(labels)
+    df_data.to_csv('features_phy.csv', index=False)
+    df_label.to_csv('labels_phy.csv', index=False)
 
 
-# feature_extraction_phy()
+def split_subject_train_test(subjects):
+    train, test = np.random.rand(subjects)
 
 
 def plot_face_blendshapes_bar_graph(face_blendshapes):
@@ -242,7 +248,7 @@ def feature_extraction_hog(subject, task, index):
         fd, hog = get_ori_hog(seg)
         plot_feature_subset(seg, hog, fd)
 
-    #plot_all_segments(segmented_images, 1)
+    # plot_all_segments(segmented_images, 1)
 
     features_hog = []
     for i in range(3):
@@ -333,5 +339,81 @@ def resize_img(images):
     return resized_images
 
 
-#feature_extraction_hog('F019', 'T8', 109)
+# feature_extraction_hog('F019', 'T8', 109)
 # print(feature_extraction_lbp('F019','T8',109))
+
+
+def compute_statistics(feature):
+    return [np.mean(feature), np.median(feature), max(feature),
+            min(feature), np.var(feature), np.std(feature)]
+
+
+def cal_stat_fea(features):
+    return [compute_statistics(f) for f in features]
+
+
+def feature_extraction(subject, task, idx):
+    return feature_extraction_hog(subject, task, idx), feature_extraction_lbp(subject, task, idx)
+
+
+def feature_combine(subject, task, idx):
+    hog_features, lbp_features = feature_extraction(subject, task, idx)
+    hog_stats = cal_stat_fea(hog_features)
+    lbp_stats = cal_stat_fea(lbp_features)
+    combined_feature = []
+    for hog_stat, lbp_stat in zip(hog_stats, lbp_stats):
+        combined_feature.append(hog_stat + lbp_stat)
+    combined_features = list(itertools.chain(*combined_feature))
+    return combined_features
+
+
+def pad_features(features, pad_value=0):
+    max_length = max(len(sublist) for sublist in features)
+    padded_features = [sublist + [pad_value] * (max_length - len(sublist)) for sublist in features]
+    return padded_features
+
+
+def average_every_three_rows(multi_list):
+    averages = []
+    num_rows = len(multi_list)
+
+    for i in range(0, num_rows, 50):
+        chunk = multi_list[i:i + 50]
+
+        if chunk:
+            chunk_average = [sum(col) / len(col) for col in zip(*chunk)]
+            averages.append(chunk_average)
+
+    return averages
+
+
+def generate_features():
+    tasks = ['T1', 'T6', 'T7', 'T8']
+    file_start = r"X:\BP4D+_v0.2\Physiology"
+    subject_list = os.listdir(file_start)
+    labels = []
+    features_list = []
+    for subject in subject_list:
+        for task in tasks:
+            methods = pre.PreProcessing(f'{subject}', f'{task}')
+            image_names = methods.select_image_files()
+            tmp = []
+            for i in range(len(image_names)):
+                print(image_names[i])
+                try:
+                    tmp.append(feature_combine(subject, task, i))
+                except ValueError as e:
+                    continue
+                except IndexError as e:
+                    continue
+            ave = average_every_three_rows(tmp)
+            features_list.extend(ave)
+            labels.append([task] * len(ave))
+
+    labels_list = list(itertools.chain(*labels))
+    print(len(features_list), len(features_list[0]), len(labels_list))
+
+    df_data = pd.DataFrame(features_list)
+    df_label = pd.DataFrame(labels)
+    df_data.to_csv('features_list.csv', index=False)
+    df_label.to_csv('label.csv', index=False)
