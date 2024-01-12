@@ -64,82 +64,86 @@ def cross_validation(features, labels):
     print("Mean cross-validation score:", scores.mean())
 
 
-def process_fea(fea_path, label_path, type):
+def get_index_from_position(row, col, df):
+    zero_based_row = row - 1
+    count = 0
+    # Count non-NaN values up to the given row
+    for r in range(zero_based_row):
+        count += df.iloc[r, :].notna().sum()
+    # Count non-NaN values in the given row up to the column
+    count += df.iloc[zero_based_row, :col].notna().sum()
+    return count
+
+
+def delete_elements(fea_path, label_path):
+    df_fea = pd.read_csv(fea_path)
+    df_label = pd.read_csv(label_path)
+    group_42_indices = range((42 - 1) * 4, 42 * 4)
+    group_82_indices = range((82 - 1) * 4, 82 * 4)
+
+    indices_to_drop = [group_42_indices[-2], group_42_indices[-1], group_82_indices[0]]
+    non_nan_count = [np.where(df_label.iloc[i].notna())[0].tolist() for i in indices_to_drop]
+    rows = [[indices_to_drop[i]] * len(non_nan_count[i]) for i in range(3)]
+
+    indics_ele = []
+    for row, col in zip(rows, non_nan_count):
+        for i, j in zip(row, col):
+            indics_ele.append(get_index_from_position(i, j, df_label))
+    df_fea_dropped = df_fea.drop(indics_ele)
+    print(indics_ele, df_fea_dropped.shape)
+    # df_fea_dropped.to_csv('features_image.csv', index=False)
+
+
+# delete_elements('features_img.csv', 'label.csv')
+
+
+def calculate_indices_of_additional_elements(df_img, df_phy):
+    def find_additional_non_nan_elements(row_img, row_phy):
+        return [index for index, (item_img, item_phy) in enumerate(zip(row_img, row_phy)) if
+                pd.notnull(item_img) and pd.isnull(item_phy)]
+
+    additional_positions = [find_additional_non_nan_elements(row_img, row_phy) for row_img, row_phy in
+                            zip(df_img.values, df_phy.values)]
+
+    flattened_positions = [(row_num, pos) for row_num, positions in enumerate(additional_positions, start=1) for pos in
+                           positions]
+
+    list_indices = [get_index_from_position(row, col, df_img) for row, col in flattened_positions]
+
+    return flattened_positions, list_indices
+
+
+def process_fea(fea_phy_path, label_phy_path, fea_img_path, label_img_path):
     label_encoder = LabelEncoder()
-    fea = pd.read_csv(fea_path)
+    fea_phy = pd.read_csv(fea_phy_path)
+    fea_img = pd.read_csv(fea_img_path)
+
+    df_label_phy = pd.read_csv(label_phy_path)
+    df_label_img = pd.read_csv(label_img_path)
 
     def drop_NaN(features):
         fea_cleaned = features.dropna(axis=1)
         return fea_cleaned
 
-    def delete_ele(df):
-        group_42_indices = range((42 - 1) * 4, 42 * 4)
-        group_82_indices = range((82 - 1) * 4, 82 * 4)
+    pos0, diff_indics_0 = calculate_indices_of_additional_elements(df_label_phy, df_label_img)
 
-        indices_to_drop = [group_42_indices[-2], group_42_indices[-1], group_82_indices[0]]
+    for row, col in pos0:
+        df_label_phy.iat[row - 1, col] = np.nan
 
-        df_dropped = df.drop(indices_to_drop)
-        return df_dropped
+    pos1, diff_indics_1 = calculate_indices_of_additional_elements(df_label_img, df_label_phy)
+    print(len(diff_indics_1))
 
-    df_label = pd.read_csv(label_path)
-    if type == 'phy':
-        label = df_label.stack().tolist()
-        numeric_labels = label_encoder.fit_transform(label)
-    else:
-        dropped_label = delete_ele(df_label)
-        label = dropped_label.stack().tolist()
-        numeric_labels = label_encoder.fit_transform(label)
-    return drop_NaN(fea), numeric_labels
+    label_phy = df_label_phy.stack().tolist()
+    label_img = df_label_img.stack().tolist()
+
+    print(len(label_phy), len(label_img))
+    numeric_labels_phy = label_encoder.fit_transform(label_phy)
+    numeric_labels_img = label_encoder.fit_transform(label_img)
+
+    return numeric_labels_phy
 
 
-fea_img, labels_img = process_fea('features_list.csv', 'label.csv', type='img')
-fea_phy, labels_phy = process_fea('features_phy.csv', 'labels_phy.csv', type='phy')
-
-
-def compare_segments_and_find_last_indices(first_list, second_list):
-    def split_into_segments(lst):
-        segments = []
-        current_segment = []
-        for item in lst:
-            if not current_segment or item == current_segment[0]:
-                current_segment.append(item)
-            else:
-                segments.append(current_segment)
-                current_segment = [item]
-        segments.append(current_segment)  # Add the last segment
-        return segments
-
-    # Split both lists into segments
-    segments_first_list = split_into_segments(first_list)
-    segments_second_list = split_into_segments(second_list)
-
-    differing_indices = []
-    index_in_second_list = 0
-
-    # Iterate through the segments, considering the shorter length of first_list segments
-    for seg1, seg2 in zip(segments_first_list, segments_second_list):
-        # If the second segment is longer, find the last differing element
-        if len(seg2) > len(seg1):
-            last_differing_index = index_in_second_list + len(seg2) - 1
-            differing_indices.append(last_differing_index)
-
-        # Update the index in the second list
-        index_in_second_list += len(seg2)
-
-    # Handle any remaining elements in the second list
-    if index_in_second_list < len(second_list):
-
-        differing_indices.append(len(second_list) - 1)
-
-    return differing_indices
-
-
-def down_sampling(X_img, y_img, X_phy, y_phy):
-    indic_drop = compare_segments_and_find_last_indices(y_phy, y_img)
-    print(len(y_phy), len(y_img), len(indic_drop))
-
-
-down_sampling(fea_img, labels_img, fea_phy, labels_phy)
+labels_img = process_fea('features_phy.csv', 'labels_phy.csv', 'features_image.csv', 'labels_img.csv')
 
 
 def feature_importance_plot():

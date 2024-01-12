@@ -10,6 +10,7 @@ from scipy.io import loadmat
 import itertools
 from PIL import Image
 import re
+from scipy.signal import butter, filtfilt
 from scipy.signal import firwin, lfilter
 
 mpl.use('Qt5Agg')
@@ -59,12 +60,17 @@ class PreProcessing:
 
         return result_data
 
+    def moving_average_filter(data, window_size):
+
+        return np.convolve(data, np.ones(window_size) / window_size, mode='valid')
+
     def spilt_in_windows(self, window_size, overlap=0):
         signals = self.select_physiology_signal()
         windows = []
         for signal_ in signals:
             if signal_:
-                w = tsfel.signal_window_splitter(signal=signal_, window_size=window_size, overlap=overlap)
+                flatten_signal = (signal_, window_size)
+                w = tsfel.signal_window_splitter(signal=flatten_signal[0], window_size=window_size, overlap=overlap)
                 windows.append(w)
         windows_arr = np.array(windows)
         windows_arr = windows_arr.transpose(1, 2, 0)
@@ -307,9 +313,11 @@ class PreProcessing:
         return physiology_signals
 
 
-# method.spilt_in_windows(window_size=3000)
-#obj = PreProcessing('F042','T8')
-#print(obj.read_feature_head_positions())
+'''
+obj = PreProcessing('F001','T1')
+obj.spilt_in_windows(window_size=2000)
+'''
+
 
 def generate():
     tasks = ['T1', 'T6', 'T7', 'T8']
@@ -322,7 +330,7 @@ def generate():
         for t in tasks:
             try:
                 me = PreProcessing(f'{id}', f'{t}')
-                sequence = me.spilt_in_windows(window_size=2000) # (id, window, 8)
+                sequence = me.spilt_in_windows(window_size=2000)  # (id, window, 8)
                 task_sequence.append(sequence)
                 labels.append([t] * len(sequence))
             except Exception as e:
@@ -330,9 +338,9 @@ def generate():
                 continue
         _dataset.append(task_sequence)
 
-    x_data = list(itertools.chain(*list(itertools.chain(*_dataset))))
+    x_data = list(itertools.chain(*list(itertools.chain(*_dataset)))) #
     label_list = list(itertools.chain(*labels))
+    return x_data, labels
 
-    return x_data, label_list
 
-# generate()
+

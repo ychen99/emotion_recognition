@@ -21,20 +21,21 @@ import mediapipe as mp
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 
+pd.set_option('display.max_seq_items', None)
 
 def feature_extraction_phy():
     X_train, labels = pre.generate()
-    name = ['BP Dia_mmHg', 'BP_mmHg', 'EDA_microsiemens', 'LA Mean BP_mmHg', 'LA Systolic BP_mmHg',
+    names = ['BP Dia_mmHg', 'BP_mmHg', 'EDA_microsiemens', 'LA Mean BP_mmHg', 'LA Systolic BP_mmHg',
             'Pulse Rate_BPM', 'Resp_Volts', 'Respiration Rate_BPM']
     cfg_file = tsfel.get_features_by_domain()
-    features = tsfel.time_series_features_extractor(cfg_file, X_train, header_names=name, fs=1000)
-    pd.set_option('display.max_seq_items', None)
-    #print(features.shape)
+
+    features = tsfel.time_series_features_extractor(cfg_file, X_train, header_names=names, fs=1000)
     df_data = pd.DataFrame(features)
-    df_label = pd.DataFrame(labels)
     df_data.to_csv('features_phy.csv', index=False)
+    df_label = pd.DataFrame(labels)
     df_label.to_csv('labels_phy.csv', index=False)
 
+#feature_extraction_phy()
 
 def split_subject_train_test(subjects):
     train, test = np.random.rand(subjects)
