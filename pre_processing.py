@@ -176,6 +176,8 @@ class PreProcessing:
             def calculate_column_averages(col_data):
                 return np.median(col_data, axis=0)
 
+
+
             all_head_pos = np.array(
                 [fit_data[i - 1][2] for i in selected_frames if i - 1 < len(fit_data) and len(fit_data[i - 1][2]) != 0])
             ave = calculate_column_averages(all_head_pos)
@@ -313,10 +315,10 @@ class PreProcessing:
         return physiology_signals
 
 
-'''
-obj = PreProcessing('F001','T1')
-obj.spilt_in_windows(window_size=2000)
-'''
+
+obj = PreProcessing('M001','T8')
+obj.plot_head_position()
+
 
 
 def generate():

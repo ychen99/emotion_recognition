@@ -139,7 +139,7 @@ def xgboost(features, labels):
     model = xgb.XGBClassifier()
     model.fit(X_train, y_train)
     feature_importance = model.feature_importances_
-    N = int(0.1 * len(feature_importance))
+    N = 40#int(0.1 * len(feature_importance))
     important_feature_indices = feature_importance.argsort()[-N:][::-1]
     X_train_important = X_train.iloc[:, important_feature_indices]
     X_test_important = X_test.iloc[:, important_feature_indices]
@@ -161,7 +161,7 @@ def cross_validation(features, labels):
 
 
 def feature_importance_plot(fea, labels, feature_names):
-    feature_imp,sorted_idx = xgboost(fea, labels)
+    feature_imp, sorted_idx = xgboost(fea, labels)
     # sorted_idx = np.argsort(feature_imp)[::-1]  # Get the indices that would sort the array
     sorted_feature_importances = np.array(feature_imp)[sorted_idx]
     sorted_feature_names = np.array(feature_names)[sorted_idx]
@@ -176,6 +176,7 @@ def feature_importance_plot(fea, labels, feature_names):
     plt.ylabel('Feature Names')
     plt.title('Feature Importance Plot')
     plt.gca().invert_yaxis()
+
     plt.tight_layout()
     plt.show()
 
@@ -184,14 +185,16 @@ fea_phy = pd.read_csv('fea_phy_final.csv')
 fea_img = pd.read_csv('fea_img_final.csv')
 labels = pd.read_csv('labels_final.csv')
 
-fea_bp = fea_phy.filter(regex = 'BP Dia_mmHg|BP_mmHg')
-fea_res = fea_phy.filter(regex = 'Resp_Volts| Respiration Rate_BPM')
-fea_hr = fea_phy.filter(regex = 'Pulse Rate_BPM')
-fea_eda = fea_phy.filter(regex = 'EDA_microsiemens')
+fea_bp = fea_phy.filter(regex='BP Dia_mmHg|BP_mmHg')
+fea_res = fea_phy.filter(regex='Resp_Volts| Respiration Rate_BPM')
+fea_hr = fea_phy.filter(regex='Pulse Rate_BPM')
+fea_eda = fea_phy.filter(regex='EDA_microsiemens')
 
-fea_concentrate = pd.concat([fea_res, fea_img, fea_eda], axis=1)
+fea_concentrate = pd.concat([fea_res, fea_img, fea_bp], axis=1)
+
 
 def result(df):
     feature_importance_plot(df, labels, df.columns)
 
-result(fea_res)
+
+result(fea_hr)
