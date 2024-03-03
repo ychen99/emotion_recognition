@@ -23,19 +23,21 @@ from mediapipe.tasks.python import vision
 
 pd.set_option('display.max_seq_items', None)
 
+
 def feature_extraction_phy():
-    X_train, labels = pre.generate()
+    phys, labels = pre.generate()
     names = ['BP Dia_mmHg', 'BP_mmHg', 'EDA_microsiemens', 'LA Mean BP_mmHg', 'LA Systolic BP_mmHg',
-            'Pulse Rate_BPM', 'Resp_Volts', 'Respiration Rate_BPM']
+             'Pulse Rate_BPM', 'Resp_Volts', 'Respiration Rate_BPM']
+
     cfg_file = tsfel.get_features_by_domain()
 
-    features = tsfel.time_series_features_extractor(cfg_file, X_train, header_names=names, fs=1000)
+    features = tsfel.time_series_features_extractor(cfg_file, phys, header_names=names, fs=1000)
+
     df_data = pd.DataFrame(features)
     df_data.to_csv('features_phy.csv', index=False)
     df_label = pd.DataFrame(labels)
     df_label.to_csv('labels_phy.csv', index=False)
 
-#feature_extraction_phy()
 
 def split_subject_train_test(subjects):
     train, test = np.random.rand(subjects)
@@ -66,7 +68,6 @@ def plot_face_blendshapes_bar_graph(face_blendshapes):
 def draw_landmarks_on_image(rgb_image, detection_result):
     face_landmarks_list = detection_result.face_landmarks
     annotated_image = np.copy(rgb_image)
-    landmark_indics = face_landmarks_list[0]
     # Loop through the detected faces to visualize.
     for idx in range(len(face_landmarks_list)):
         face_landmarks = face_landmarks_list[idx]
@@ -104,7 +105,7 @@ def draw_landmarks_on_image(rgb_image, detection_result):
 
 def image_process(subject, task, image_index):
     methods = pre.PreProcessing(f'{subject}', f'{task}')
-    path = r'X:\BP4D+_v0.2\2D+3D'
+    path = r'X:\PPGI\BP4D+_v0.2\2D+3D'
     end = f'{subject}.zip'
     image_names = methods.select_image_files()
     # Path to ZIP file
@@ -368,29 +369,29 @@ def feature_combine(subject, task, idx):
     return combined_features
 
 
+'''
 def pad_features(features, pad_value=0):
     max_length = max(len(sublist) for sublist in features)
     padded_features = [sublist + [pad_value] * (max_length - len(sublist)) for sublist in features]
     return padded_features
+'''
 
 
-def average_every_three_rows(multi_list):
+def average_every_50_rows(multi_list, nums=50):
     averages = []
-    num_rows = len(multi_list)
+    num_rows = len(multi_list) - (len(multi_list) % nums)
 
-    for i in range(0, num_rows, 50):
-        chunk = multi_list[i:i + 50]
-
-        if chunk:
-            chunk_average = [sum(col) / len(col) for col in zip(*chunk)]
-            averages.append(chunk_average)
+    for i in range(0, num_rows, nums):
+        chunk = multi_list[i:i + nums]
+        chunk_average = [sum(col) / len(col) for col in zip(*chunk)]
+        averages.append(chunk_average)
 
     return averages
 
 
-def generate_features():
+def generate_img_features():
     tasks = ['T1', 'T6', 'T7', 'T8']
-    file_start = r"X:\BP4D+_v0.2\Physiology"
+    file_start = r"X:\PPGI\BP4D+_v0.2\Physiology"
     subject_list = os.listdir(file_start)
     labels = []
     features_list = []
@@ -407,7 +408,7 @@ def generate_features():
                     continue
                 except IndexError as e:
                     continue
-            ave = average_every_three_rows(tmp)
+            ave = average_every_50_rows(tmp)
             features_list.extend(ave)
             labels.append([task] * len(ave))
 
@@ -418,3 +419,81 @@ def generate_features():
     df_label = pd.DataFrame(labels)
     df_data.to_csv('features_list.csv', index=False)
     df_label.to_csv('label.csv', index=False)
+
+
+def thermal_features(subject, task):
+    path = 'X:\PPGI\BP4D+_v0.2\Thermal'
+    bridge_path = f"{subject}_f{task}.mat"
+
+    video = cv2.VideoCapture('input_video.mp4')
+
+    # Check if video opened successfully
+    if not video.isOpened():
+        print("Error: Could not open video.")
+        exit()
+
+    # Frame rate
+    fps = 25
+    frame_interval = int(1000 / fps)  # in milliseconds
+    frame_number = 0
+
+    while True:
+        # Read a frame
+        success, frame = video.read()
+
+        # Break the loop if there are no more frames
+        if not success:
+            break
+
+        # Save the frame as an image file
+        frame_filename = f"frame_{frame_number:04d}.png"
+        cv2.imwrite(frame_filename, frame)
+        frame_number += 1
+
+        # Wait for the frame interval time
+        cv2.waitKey(frame_interval)
+
+    # Release the video capture object
+    video.release()
+    cv2.destroyAllWindows()
+
+
+def flatten_label(data_dict):
+    flattened_list = []
+    for key, value in data_dict.items():
+        for sublist in value:
+            flattened_list.append([key, sublist])
+    return flattened_list
+
+
+def aus_extractor():
+    tasks = ['T1', 'T6', 'T7', 'T8']
+    file_start = r"X:\PPGI\BP4D+_v0.2\Physiology"
+    subject_list = os.listdir(file_start)
+    labels = {}
+    au_features = []
+    for subject_id in subject_list:
+        tmp = []
+        tmp_label = []
+        for task in tasks:
+            if (subject_id == 'F042' and task =='T7') or (subject_id == 'F042' and task =='T8') or (subject_id == 'F082' and task =='T1'):
+
+            else:
+                methods = pre.PreProcessing(f'{subject_id}', f'{task}')
+                aus = methods.aus_combines()
+                ave = average_every_50_rows(aus)
+                tmp.extend(ave)
+                tmp_label.extend([task] * len(ave))
+        au_features.append(tmp)
+        labels[subject_id] = tmp_label
+
+    au_features_list = list(itertools.chain(*au_features))
+    flattened_labels = flatten_label(labels)
+    print(len(flattened_labels), len(au_features_list))
+
+    '''
+    df_data = pd.DataFrame(au_features)
+    df_label = pd.DataFrame(labels)
+    df_data.to_csv('AU_features.csv', index=False)
+    df_label.to_csv('AU_labels.csv', index=False)
+    '''

@@ -32,9 +32,7 @@ def get_index_from_position(row, col, df):
     return count
 
 
-def delete_elements(fea_path, label_path):
-    df_fea = pd.read_csv(fea_path)
-    df_label = pd.read_csv(label_path)
+def delete_elements(df_fea, df_label):
     group_42_indices = range((42 - 1) * 4, 42 * 4)
     group_82_indices = range((82 - 1) * 4, 82 * 4)
 
@@ -49,9 +47,8 @@ def delete_elements(fea_path, label_path):
     df_fea_dropped = df_fea.drop(indics_ele)
     print(indics_ele, df_fea_dropped.shape)
     # df_fea_dropped.to_csv('features_image.csv', index=False)
+    return df_fea_dropped
 
-
-# delete_elements('features_img.csv', 'label.csv')
 
 
 def calculate_indices_of_additional_elements(df_img, df_phy):
@@ -83,6 +80,8 @@ def process_fea(fea_phy_path, label_phy_path, fea_img_path, label_img_path):
     df_label_phy = pd.read_csv(label_phy_path)
     df_label_img = pd.read_csv(label_img_path)
 
+    fea_img_del = delete_elements(fea_img,df_label_img)
+    print('other:',len(fea_img_del))
     def drop_NaN(features):
         fea_cleaned = features.dropna(axis=1)
         return fea_cleaned
@@ -98,26 +97,27 @@ def process_fea(fea_phy_path, label_phy_path, fea_img_path, label_img_path):
 
     for row, col in pos0:
         df_label_img.iat[row - 1, col] = np.nan
-
-    fea_img_dropped = fea_img.drop(diff_indics_1)
+    print(diff_indics_1)
+    fea_img_dropped = fea_img_del.drop(diff_indics_1)
 
     label_phy = df_label_phy.stack().tolist()
     numeric_labels_phy = label_encoder.fit_transform(label_phy)
 
     new_fea_img = delete_redundant(drop_NaN(fea_img_dropped), df_label_img)
     new_fea_phy = drop_NaN(fea_phy_dropped)
-
-    new_fea_phy.to_csv('fea_phy_final.csv', index=False)
-    new_fea_img.to_csv('fea_img_final.csv', index=False)
+    print(len(new_fea_img), len(new_fea_phy))
+    # new_fea_phy.to_csv('fea_phy_final.csv', index=False)
+    # new_fea_img.to_csv('fea_au_final.csv', index=False)
     numeric_labels_df = pd.DataFrame(numeric_labels_phy)
-    numeric_labels_df.to_csv('labels_final.csv', index=False)
+    #numeric_labels_df.to_csv('labels_final.csv', index=False)
 
 
-# process_fea('features_phy.csv', 'labels_phy.csv', 'features_image.csv', 'labels_img.csv')
+process_fea('fea_phy_final.csv', 'labels_phy.csv', 'AU_features.csv', 'AU_labels.csv')
 
-name = ['mean', 'median', 'max', 'min', 'var', 'std']
-prefixes = ['hog1', 'lbp1', 'hog2', 'lbp2', 'hog3', 'lbp3']
-feature_img_names = list(itertools.chain(*[[f"{prefix}_{n}" for n in name] for prefix in prefixes]))
+def feature_names_add():
+    name = ['mean', 'median', 'max', 'min', 'var', 'std']
+    prefixes = ['hog1', 'lbp1', 'hog2', 'lbp2', 'hog3', 'lbp3']
+    feature_img_names = list(itertools.chain(*[[f"{prefix}_{n}" for n in name] for prefix in prefixes]))
 
 
 def feature_standarlization(feature_arr):
@@ -181,20 +181,22 @@ def feature_importance_plot(fea, labels, feature_names):
     plt.show()
 
 
-fea_phy = pd.read_csv('fea_phy_final.csv')
-fea_img = pd.read_csv('fea_img_final.csv')
-labels = pd.read_csv('labels_final.csv')
+def fea_comb():
+    fea_phy = pd.read_csv('fea_phy_final.csv')
+    fea_img = pd.read_csv('fea_img_final.csv')
+    labels = pd.read_csv('labels_final.csv')
 
-fea_bp = fea_phy.filter(regex='BP Dia_mmHg|BP_mmHg')
-fea_res = fea_phy.filter(regex='Resp_Volts| Respiration Rate_BPM')
-fea_hr = fea_phy.filter(regex='Pulse Rate_BPM')
-fea_eda = fea_phy.filter(regex='EDA_microsiemens')
+    fea_bp = fea_phy.filter(regex='BP Dia_mmHg|BP_mmHg')
+    fea_res = fea_phy.filter(regex='Resp_Volts| Respiration Rate_BPM')
+    fea_hr = fea_phy.filter(regex='Pulse Rate_BPM')
+    fea_eda = fea_phy.filter(regex='EDA_microsiemens')
 
-fea_concentrate = pd.concat([fea_res, fea_img, fea_bp], axis=1)
+    fea_concentrate = pd.concat([fea_res, fea_img, fea_bp], axis=1)
+    return fea_hr, labels
 
 
-def result(df):
+def result(df,labels):
     feature_importance_plot(df, labels, df.columns)
 
 
-result(fea_hr)
+# result(fea_hr)

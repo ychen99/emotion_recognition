@@ -10,8 +10,10 @@ from scipy.io import loadmat
 import itertools
 from PIL import Image
 import re
-from scipy.signal import butter, filtfilt
-from scipy.signal import firwin, lfilter
+from scipy.signal import medfilt
+from skimage import io as skio, color
+import cv2
+import matplotlib.gridspec as gridspec
 
 mpl.use('Qt5Agg')
 
@@ -26,7 +28,7 @@ class PreProcessing:
                 'LA Systolic BP_mmHg.txt',
                 'Pulse Rate_BPM.txt', 'Resp_Volts.txt', 'Respiration Rate_BPM.txt']
 
-        file_start = r"X:\BP4D+_v0.2\Physiology"
+        file_start = r"X:\PPGI\BP4D+_v0.2\Physiology"
         dir_list = os.listdir(file_start)
 
         column = ['BP Dia_mmHg', 'BP_mmHg', 'EDA_microsiemens', 'LA Mean BP_mmHg', 'LA Systolic BP_mmHg',
@@ -64,17 +66,16 @@ class PreProcessing:
 
         return np.convolve(data, np.ones(window_size) / window_size, mode='valid')
 
-    def spilt_in_windows(self, window_size, overlap=0):
+    def split_in_windows(self, window_size, overlap=0):
         signals = self.select_physiology_signal()
         windows = []
         for signal_ in signals:
             if signal_:
-                flatten_signal = (signal_, window_size)
-                w = tsfel.signal_window_splitter(signal=flatten_signal[0], window_size=window_size, overlap=overlap)
+                flatten_signal = medfilt(signal_)
+                w = tsfel.signal_window_splitter(signal=flatten_signal, window_size=window_size, overlap=overlap)
                 windows.append(w)
         windows_arr = np.array(windows)
         windows_arr = windows_arr.transpose(1, 2, 0)
-
         return windows_arr
 
     def select_image_files(self):
@@ -88,7 +89,7 @@ class PreProcessing:
             Returns:
             list: A list of filtered image file paths.
             """
-        path = r'X:\BP4D+_v0.2\2D+3D'
+        path = r'X:\PPGI\BP4D+_v0.2\2D+3D'
         end = f'{self.subject}.zip'
         zip_path = os.path.join(path, end)
 
@@ -128,7 +129,7 @@ class PreProcessing:
         Returns:
         numpy.ndarray: An array containing the merged AU data.
         """
-        path = r'X:\BP4D+_v0.2\AUCoding\AU_INT'
+        path = r'X:\PPGI\BP4D+_v0.2\AUCoding\AU_INT'
         dir_list = os.listdir(path)
         name = f'{self.subject}_{self.task}_'
         aus = []
@@ -160,7 +161,7 @@ class PreProcessing:
         """
         Extracts head position data for specific frames from a MATLAB file.
         """
-        path = r'X:\BP4D+_v0.2\2DFeatures'
+        path = r'X:\PPGI\BP4D+_v0.2\2DFeatures'
         bridge_path = f"{self.subject}_{self.task}.mat"
         mat_path = os.path.join(path, bridge_path)
 
@@ -175,8 +176,6 @@ class PreProcessing:
 
             def calculate_column_averages(col_data):
                 return np.median(col_data, axis=0)
-
-
 
             all_head_pos = np.array(
                 [fit_data[i - 1][2] for i in selected_frames if i - 1 < len(fit_data) and len(fit_data[i - 1][2]) != 0])
@@ -198,14 +197,20 @@ class PreProcessing:
         except Exception as e:
             print(f"An error occurred: {e}")
             return None
-        '''
-        for i in range(len(head_positions)):
-            print(head_positions[i][0][0])
-        '''
+
         return head_positions
 
+    def aus_combines(self):
+        aus = self.frames_from_au()
+        hp = self.read_feature_head_positions()
+        sublist = [selected_[0][0][0] for selected_ in hp]
+
+        filter = [row[1:] for row in aus if row[0] in sublist]
+        filter_aus = [array.tolist() for array in filter]
+        return filter_aus
+
     def plot_head_position(self):
-        path = r'X:\BP4D+_v0.2\2DFeatures'
+        path = r'X:\PPGI\BP4D+_v0.2\2DFeatures'
         bridge_path = f"{self.subject}_{self.task}.mat"
         mat_path = os.path.join(path, bridge_path)
         mat_data = loadmat(mat_path)
@@ -282,12 +287,12 @@ class PreProcessing:
         return location
 
     def select_physiology_signal(self, sample=1000, fps=25):
-        base_path = r'X:\BP4D+_v0.2\Physiology'
-        folder_path = f'{self.subject}/{self.task}'
+        base_path = r'X:\PPGI\BP4D+_v0.2\Physiology'
+        folder_path = f'{self.subject}\{self.task}'
         signal_names = ['BP Dia_mmHg', 'BP_mmHg', 'EDA_microsiemens', 'LA Mean BP_mmHg',
                         'LA Systolic BP_mmHg', 'Pulse Rate_BPM', 'Resp_Volts', 'Respiration Rate_BPM']
 
-        head_positions = self.read_feature_head_positions()
+        head_positions = self.read_feature_head_positions() #"X:\PPGI\BP4D+_v0.2\Physiology\F001\T1\BP Dia_mmHg.txt"
         frames = []
         for a in head_positions:
             m = (a[0][0][0] / int(fps)) * int(sample)
@@ -310,39 +315,43 @@ class PreProcessing:
                 segment_values = segment.values.T
                 signal_segments.append(segment_values[0])
             flatten_segments = [item for sublist in signal_segments for item in sublist]
+
             physiology_signals.append(flatten_segments)
-
         return physiology_signals
-
-
-
-obj = PreProcessing('M001','T8')
-obj.plot_head_position()
-
 
 
 def generate():
     tasks = ['T1', 'T6', 'T7', 'T8']
-    file_start = r"X:\BP4D+_v0.2\Physiology"
+    file_start = r"X:\PPGI\BP4D+_v0.2\Physiology"
     subject_list = os.listdir(file_start)
+
     _dataset = []
-    labels = []
-    for id in subject_list:
+    labels = {}
+    for subject_id in subject_list:
         task_sequence = []
-        for t in tasks:
+        all_task_labels = []
+        for task in tasks:
             try:
-                me = PreProcessing(f'{id}', f'{t}')
-                sequence = me.spilt_in_windows(window_size=2000)  # (id, window, 8)
+                dataProcessor = PreProcessing(subject_id, task)
+                sequence = dataProcessor.split_in_windows(window_size=2000)
                 task_sequence.append(sequence)
-                labels.append([t] * len(sequence))
+                all_task_labels.extend([task] * len(sequence))
             except Exception as e:
-                print(f"No such window data {id} and {t} : {e}")
+                print(f"No such window data {subject_id} and {task} : {e}")
                 continue
         _dataset.append(task_sequence)
+        labels[subject_id] = all_task_labels
 
-    x_data = list(itertools.chain(*list(itertools.chain(*_dataset)))) #
-    label_list = list(itertools.chain(*labels))
-    return x_data, labels
+    x_data = list(itertools.chain(*list(itertools.chain(*_dataset))))
 
+    def flatten_label(data_dict):
+        flattened_list = []
+        for key, value in data_dict.items():
+            for sublist in value:
+                flattened_list.append([key, sublist])
+        return flattened_list
+
+    flatten_labels = flatten_label(labels)
+    return x_data, flatten_labels
 
 
