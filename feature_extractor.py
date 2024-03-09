@@ -4,6 +4,7 @@ import cv2
 import math
 import numpy as np
 import pandas as pd
+import scipy
 import tsfel
 from mediapipe.framework.formats import landmark_pb2
 from mediapipe.python import solutions
@@ -34,10 +35,11 @@ def feature_extraction_phy():
     features = tsfel.time_series_features_extractor(cfg_file, phys, header_names=names, fs=1000)
 
     df_data = pd.DataFrame(features)
-    df_data.to_csv('features_phy.csv', index=False)
+    df_data.to_csv('features_phy_1s.csv', index=False)
     df_label = pd.DataFrame(labels)
-    df_label.to_csv('labels_phy.csv', index=False)
+    df_label.to_csv('labels_phy_1s.csv', index=False)
 
+feature_extraction_phy()
 
 def split_subject_train_test(subjects):
     train, test = np.random.rand(subjects)
@@ -377,7 +379,7 @@ def pad_features(features, pad_value=0):
 '''
 
 
-def average_every_50_rows(multi_list, nums=50):
+def average_every_50_rows(multi_list, nums=25):
     averages = []
     num_rows = len(multi_list) - (len(multi_list) % nums)
 
@@ -421,43 +423,6 @@ def generate_img_features():
     df_label.to_csv('label.csv', index=False)
 
 
-def thermal_features(subject, task):
-    path = 'X:\PPGI\BP4D+_v0.2\Thermal'
-    bridge_path = f"{subject}_f{task}.mat"
-
-    video = cv2.VideoCapture('input_video.mp4')
-
-    # Check if video opened successfully
-    if not video.isOpened():
-        print("Error: Could not open video.")
-        exit()
-
-    # Frame rate
-    fps = 25
-    frame_interval = int(1000 / fps)  # in milliseconds
-    frame_number = 0
-
-    while True:
-        # Read a frame
-        success, frame = video.read()
-
-        # Break the loop if there are no more frames
-        if not success:
-            break
-
-        # Save the frame as an image file
-        frame_filename = f"frame_{frame_number:04d}.png"
-        cv2.imwrite(frame_filename, frame)
-        frame_number += 1
-
-        # Wait for the frame interval time
-        cv2.waitKey(frame_interval)
-
-    # Release the video capture object
-    video.release()
-    cv2.destroyAllWindows()
-
-
 def flatten_label(data_dict):
     flattened_list = []
     for key, value in data_dict.items():
@@ -476,24 +441,180 @@ def aus_extractor():
         tmp = []
         tmp_label = []
         for task in tasks:
-            if (subject_id == 'F042' and task =='T7') or (subject_id == 'F042' and task =='T8') or (subject_id == 'F082' and task =='T1'):
-
-            else:
-                methods = pre.PreProcessing(f'{subject_id}', f'{task}')
-                aus = methods.aus_combines()
-                ave = average_every_50_rows(aus)
-                tmp.extend(ave)
-                tmp_label.extend([task] * len(ave))
+            # Skipping specific conditions
+            if (subject_id == 'F042' and task in ['T7', 'T8']) or (subject_id == 'F082' and task == 'T1'):
+                continue  # skip
+            methods = pre.PreProcessing(f'{subject_id}', f'{task}')
+            aus = methods.aus_combines()
+            ave = average_every_50_rows(aus)
+            tmp.extend(ave)
+            tmp_label.extend([task] * len(ave))
         au_features.append(tmp)
         labels[subject_id] = tmp_label
 
     au_features_list = list(itertools.chain(*au_features))
     flattened_labels = flatten_label(labels)
-    print(len(flattened_labels), len(au_features_list))
+    print("aus",len(flattened_labels), len(au_features_list))
 
-    '''
-    df_data = pd.DataFrame(au_features)
-    df_label = pd.DataFrame(labels)
-    df_data.to_csv('AU_features.csv', index=False)
-    df_label.to_csv('AU_labels.csv', index=False)
-    '''
+    df_data = pd.DataFrame(au_features_list)
+    df_label = pd.DataFrame(flattened_labels)
+    df_data.to_csv('features_au_1s.csv', index=False)
+    df_label.to_csv('labels_au_1s.csv', index=False)
+
+
+
+def process_txt_file_simple(file_path):
+    with open(file_path, 'r') as file:
+        elements = [[float(item) for item in line.strip().split()] for line in file.readlines()]
+
+    grouped_data = []
+
+    for line in elements:
+        if len(line) == 56:
+            grouped_line = [(line[i], line[i + 1]) for i in range(0, len(line), 2)]
+            grouped_data.append(grouped_line)
+
+    return grouped_data
+
+
+def crop_ir_images(subject, task, idx):
+    # Constructing the image path
+    image_path_start = r"C:\Users\YChen\Thermal"
+    image_path_end = f'output_{idx}.jpg'
+    image_path = os.path.join(image_path_start, subject, task, image_path_end)
+    # Constructing the IR features path
+    ir_path_start = r"X:\PPGI\BP4D+_v0.2\IRFeatures"
+    ir_path_end = f'{subject}_{task}.txt'
+    ir_path = os.path.join(ir_path_start, ir_path_end)
+
+    image = cv2.imread(image_path)
+    idx_num = int(idx)
+    indics = process_txt_file_simple(ir_path)[idx_num - 1]
+
+    # height, width = image.shape[:2]
+
+    # x_axis
+    r1_x0 = [5, 27]
+    r1_x1 = [16, 28]
+    r2_x0 = [5]
+    r2_x1 = [16]
+    r3_x0 = [5]
+    r3_x1 = [16]
+    # y_axis
+    r1_y0 = [3, 4, 14, 15, 27, 28]
+    r1_y1 = [8, 19]
+    r2_y1 = [10, 21]
+    r3_y1 = [13, 26, 24]
+
+    cropped_images = []
+
+    def calculate_min_max(arr, axis, operation):
+        extracted_elements = [indics[i - 1][1] if axis == 'y' else indics[i - 1][0] for i in arr]
+        return np.max(extracted_elements) if operation == 'max' else np.min(extracted_elements)
+
+    def crop_image(img, bounds):
+        start_x = int(bounds[0])
+        end_x = int(bounds[1])
+        start_y = int(bounds[2])
+        end_y = int(bounds[3])
+        return img[start_y:end_y, start_x:end_x]
+
+    first_bound = [calculate_min_max(r1_x0, 'x', 'min'),
+                   calculate_min_max(r1_x1, 'x', 'max'),
+                   calculate_min_max(r1_y0, 'y', 'min'),
+                   calculate_min_max(r1_y1, 'y', 'max')]
+
+    second_bound = [calculate_min_max(r2_x0, 'x', 'min'),
+                    calculate_min_max(r2_x1, 'x', 'max'),
+                    calculate_min_max(r1_y1, 'y', 'max'),
+                    calculate_min_max(r2_y1, 'y', 'max')]
+
+    third_bound = [calculate_min_max(r3_x0, 'x', 'min'),
+                   calculate_min_max(r3_x1, 'x', 'max'),
+                   calculate_min_max(r2_y1, 'y', 'max'),
+                   calculate_min_max(r3_y1, 'y', 'max')]
+
+    cropped_images.append(crop_image(image, first_bound))
+    cropped_images.append(crop_image(image, second_bound))
+    cropped_images.append(crop_image(image, third_bound))
+    return image, cropped_images
+
+
+def calculate_color_moments(image):
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+
+    color_features = []
+    # For each channel: R, G, B
+    for i, color in enumerate(['red', 'green', 'blue']):
+        channel = image[:, :, i].flatten()
+
+        mean = np.mean(channel)
+        variance = np.var(channel)
+        skewness = scipy.stats.skew(channel)
+
+        color_features.extend([mean, variance, skewness])
+
+    return color_features
+
+
+def color_features_ir(subject, task, idx):
+    _, cropped = crop_ir_images(subject, task, idx)
+
+    features = []
+    for img in cropped:
+        if img is not None and img.size > 0:
+            moments = calculate_color_moments(img)
+            features.extend(moments)
+        else:
+            print(f"Image is not loaded properly.")
+    return features
+
+
+def extract_number_from_path(str):
+    last_slash_pos = str.rfind('/')
+    jpg_pos = str.find('.jpg')
+
+    number = str[last_slash_pos + 1:jpg_pos]
+    formatted_number = number.zfill(4)
+    return formatted_number
+
+
+def thermol_features_generator():
+    tasks = ['T1', 'T6', 'T7', 'T8']
+    file_start = r"X:\PPGI\BP4D+_v0.2\Physiology"
+    subject_list = os.listdir(file_start)
+
+    labels = {}
+    features_list = []
+    for subject_id in subject_list:
+        for task in tasks:
+            if (subject_id == 'F042' and task in ['T7', 'T8']) or (subject_id == 'F082' and task == 'T1') or (
+                    subject_id == 'M049' and task in ['T1', 'T6', 'T7', 'T8']):
+                continue
+            dataPrecesor = pre.PreProcessing(f'{subject_id}', f'{task}')
+            image_names = dataPrecesor.select_image_files()
+            sequence = []
+            for name in image_names:
+                print(name)
+                name_id = extract_number_from_path(name)
+                try:
+                    sequence.append(color_features_ir(subject_id, task, name_id))
+                except IndexError:
+                    print(f"IndexError caught for {subject_id}, {task}, {name_id}: skipping.")
+                    continue  # Skip this iteration and proceed with the next name
+            averaged_features = average_every_50_rows(sequence)
+            features_list.extend(averaged_features)
+            labels[subject_id] = labels.get(subject_id, []) + [task] * len(averaged_features)
+
+    flattened_labels = flatten_label(labels)
+    print('ir: ',len(flattened_labels), len(features_list), len(features_list[0]))
+
+
+    df_data = pd.DataFrame(features_list)
+    df_label = pd.DataFrame(flattened_labels)
+    df_data.to_csv('features_ir_1s.csv', index=False)
+    df_label.to_csv('labels_ir_1s.csv', index=False)
+
+
+
+#thermol_features_generator()

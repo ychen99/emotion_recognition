@@ -333,7 +333,7 @@ def generate():
         for task in tasks:
             try:
                 dataProcessor = PreProcessing(subject_id, task)
-                sequence = dataProcessor.split_in_windows(window_size=2000)
+                sequence = dataProcessor.split_in_windows(window_size=1000)
                 task_sequence.append(sequence)
                 all_task_labels.extend([task] * len(sequence))
             except Exception as e:

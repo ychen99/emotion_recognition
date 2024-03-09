@@ -4,6 +4,7 @@ import matplotlib
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import sklearn
 from imblearn.under_sampling import RandomUnderSampler
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import classification_report
@@ -20,7 +21,7 @@ from matplotlib import cm
 mpl.use('Qt5Agg')
 pd.set_option('display.max_seq_items', None)
 
-
+'''
 def get_index_from_position(row, col, df):
     zero_based_row = row - 1
     count = 0
@@ -111,14 +112,22 @@ def process_fea(fea_phy_path, label_phy_path, fea_img_path, label_img_path):
     numeric_labels_df = pd.DataFrame(numeric_labels_phy)
     #numeric_labels_df.to_csv('labels_final.csv', index=False)
 
+'''
 
-process_fea('fea_phy_final.csv', 'labels_phy.csv', 'AU_features.csv', 'AU_labels.csv')
 
-def feature_names_add():
-    name = ['mean', 'median', 'max', 'min', 'var', 'std']
-    prefixes = ['hog1', 'lbp1', 'hog2', 'lbp2', 'hog3', 'lbp3']
-    feature_img_names = list(itertools.chain(*[[f"{prefix}_{n}" for n in name] for prefix in prefixes]))
+def feature_names_add(image):
+    if image == 'ir':
+        name = ['mean', 'var', 'skew']
+        prefixes = ['red1', 'green1', 'blue1', 'red2', 'green2', 'blue2', 'red3', 'green3', 'blue3']
+    else:
+        name = ['mean', 'median', 'max', 'min', 'var', 'std']
+        prefixes = ['hog1', 'lbp1', 'hog2', 'lbp2', 'hog3', 'lbp3']
 
+    feature_names = list(itertools.chain(*[[f"{prefix}_{n}" for n in name] for prefix in prefixes]))
+
+    return feature_names
+
+print(len(feature_names_add(image="aa")))
 
 def feature_standarlization(feature_arr):
     scaler = StandardScaler()
@@ -139,7 +148,7 @@ def xgboost(features, labels):
     model = xgb.XGBClassifier()
     model.fit(X_train, y_train)
     feature_importance = model.feature_importances_
-    N = 40#int(0.1 * len(feature_importance))
+    N = 40  # int(0.1 * len(feature_importance))
     important_feature_indices = feature_importance.argsort()[-N:][::-1]
     X_train_important = X_train.iloc[:, important_feature_indices]
     X_test_important = X_test.iloc[:, important_feature_indices]
@@ -161,11 +170,11 @@ def cross_validation(features, labels):
 
 
 def feature_importance_plot(fea, labels, feature_names):
+
     feature_imp, sorted_idx = xgboost(fea, labels)
     # sorted_idx = np.argsort(feature_imp)[::-1]  # Get the indices that would sort the array
     sorted_feature_importances = np.array(feature_imp)[sorted_idx]
     sorted_feature_names = np.array(feature_names)[sorted_idx]
-    print(sorted_feature_names)
 
     plt.figure(figsize=(16, 8))
 
@@ -182,21 +191,26 @@ def feature_importance_plot(fea, labels, feature_names):
 
 
 def fea_comb():
-    fea_phy = pd.read_csv('fea_phy_final.csv')
-    fea_img = pd.read_csv('fea_img_final.csv')
-    labels = pd.read_csv('labels_final.csv')
-
+    fea_phy = pd.read_csv('features_phy_final.csv')
+    fea_ir = pd.read_csv('features_ir_final.csv')
+    fea_au = pd.read_csv('features_au_final.csv')
+    labels = pd.read_csv('labels_final.csv').iloc[:, 1:]
+    fea_ir_new = fea_ir.fillna(0)
+    label_encoder = LabelEncoder()
+    num_labels = label_encoder.fit_transform(labels)
     fea_bp = fea_phy.filter(regex='BP Dia_mmHg|BP_mmHg')
     fea_res = fea_phy.filter(regex='Resp_Volts| Respiration Rate_BPM')
     fea_hr = fea_phy.filter(regex='Pulse Rate_BPM')
     fea_eda = fea_phy.filter(regex='EDA_microsiemens')
+    fea_ir_new.columns = feature_names_add(image='ir')
+    fea_concentrate = pd.concat([fea_phy, fea_au], axis=1)
+    return fea_ir_new, num_labels
 
-    fea_concentrate = pd.concat([fea_res, fea_img, fea_bp], axis=1)
-    return fea_hr, labels
 
-
-def result(df,labels):
+def result(df, labels):
     feature_importance_plot(df, labels, df.columns)
 
 
-# result(fea_hr)
+df, labels = fea_comb()
+#result(df, labels)
+
