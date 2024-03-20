@@ -39,7 +39,7 @@ def feature_extraction_phy():
     df_label = pd.DataFrame(labels)
     df_label.to_csv('labels_phy_1s.csv', index=False)
 
-feature_extraction_phy()
+
 
 def split_subject_train_test(subjects):
     train, test = np.random.rand(subjects)
@@ -349,7 +349,7 @@ def resize_img(images):
 
 def compute_statistics(feature):
     return [np.mean(feature), np.median(feature), max(feature),
-            min(feature), np.var(feature), np.std(feature)]
+            min(feature), np.var(feature)]
 
 
 def cal_stat_fea(features):
@@ -419,9 +419,10 @@ def generate_img_features():
 
     df_data = pd.DataFrame(features_list)
     df_label = pd.DataFrame(labels)
-    df_data.to_csv('features_list.csv', index=False)
-    df_label.to_csv('label.csv', index=False)
+    df_data.to_csv('features_img.csv', index=False)
+    df_label.to_csv('labels_img.csv', index=False)
 
+generate_img_features()
 
 def flatten_label(data_dict):
     flattened_list = []
@@ -617,4 +618,4 @@ def thermol_features_generator():
 
 
 
-#thermol_features_generator()
+aus_extractor()

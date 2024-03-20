@@ -1,5 +1,5 @@
 import itertools
-
+import os.path
 import matplotlib
 import numpy as np
 import pandas as pd
@@ -7,10 +7,10 @@ import matplotlib.pyplot as plt
 import sklearn
 from imblearn.under_sampling import RandomUnderSampler
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import classification_report
+from sklearn.metrics import classification_report, accuracy_score
 from sklearn.preprocessing import StandardScaler, LabelEncoder
 from sklearn.decomposition import PCA
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, KFold
 import xgboost as xgb
 from sklearn import svm
 import matplotlib as mpl
@@ -21,158 +21,83 @@ from matplotlib import cm
 mpl.use('Qt5Agg')
 pd.set_option('display.max_seq_items', None)
 
-'''
-def get_index_from_position(row, col, df):
-    zero_based_row = row - 1
-    count = 0
-    # Count non-NaN values up to the given row
-    for r in range(zero_based_row):
-        count += df.iloc[r, :].notna().sum()
-    # Count non-NaN values in the given row up to the column
-    count += df.iloc[zero_based_row, :col].notna().sum()
-    return count
-
-
-def delete_elements(df_fea, df_label):
-    group_42_indices = range((42 - 1) * 4, 42 * 4)
-    group_82_indices = range((82 - 1) * 4, 82 * 4)
-
-    indices_to_drop = [group_42_indices[-2], group_42_indices[-1], group_82_indices[0]]
-    non_nan_count = [np.where(df_label.iloc[i].notna())[0].tolist() for i in indices_to_drop]
-    rows = [[indices_to_drop[i]] * len(non_nan_count[i]) for i in range(3)]
-
-    indics_ele = []
-    for row, col in zip(rows, non_nan_count):
-        for i, j in zip(row, col):
-            indics_ele.append(get_index_from_position(i, j, df_label))
-    df_fea_dropped = df_fea.drop(indics_ele)
-    print(indics_ele, df_fea_dropped.shape)
-    # df_fea_dropped.to_csv('features_image.csv', index=False)
-    return df_fea_dropped
-
-
-
-def calculate_indices_of_additional_elements(df_img, df_phy):
-    def find_additional_non_nan_elements(row_img, row_phy):
-        return [index for index, (item_img, item_phy) in enumerate(zip(row_img, row_phy)) if
-                pd.notnull(item_img) and pd.isnull(item_phy)]
-
-    additional_positions = [find_additional_non_nan_elements(row_img, row_phy) for row_img, row_phy in
-                            zip(df_img.values, df_phy.values)]
-
-    flattened_positions = [(row_num, pos) for row_num, positions in enumerate(additional_positions, start=1) for pos in
-                           positions]
-    # flattened_positions.append((27, 13))
-    list_indices = [get_index_from_position(row, col, df_img) for row, col in flattened_positions]
-
-    return flattened_positions, list_indices
-
-
-def delete_redundant(df, label):
-    indics = get_index_from_position(27, 13, label)
-    df_dropped = df.drop(indics)
-    return df_dropped
-
-
-def process_fea(fea_phy_path, label_phy_path, fea_img_path, label_img_path):
-    label_encoder = LabelEncoder()
-    fea_phy = pd.read_csv(fea_phy_path)
-    fea_img = pd.read_csv(fea_img_path)
-    df_label_phy = pd.read_csv(label_phy_path)
-    df_label_img = pd.read_csv(label_img_path)
-
-    fea_img_del = delete_elements(fea_img,df_label_img)
-    print('other:',len(fea_img_del))
-    def drop_NaN(features):
-        fea_cleaned = features.dropna(axis=1)
-        return fea_cleaned
-
-    pos0, diff_indics_0 = calculate_indices_of_additional_elements(df_label_phy, df_label_img)
-
-    for row, col in pos0:
-        df_label_phy.iat[row - 1, col] = np.nan
-
-    fea_phy_dropped = fea_phy.drop(diff_indics_0)
-
-    pos1, diff_indics_1 = calculate_indices_of_additional_elements(df_label_img, df_label_phy)
-
-    for row, col in pos0:
-        df_label_img.iat[row - 1, col] = np.nan
-    print(diff_indics_1)
-    fea_img_dropped = fea_img_del.drop(diff_indics_1)
-
-    label_phy = df_label_phy.stack().tolist()
-    numeric_labels_phy = label_encoder.fit_transform(label_phy)
-
-    new_fea_img = delete_redundant(drop_NaN(fea_img_dropped), df_label_img)
-    new_fea_phy = drop_NaN(fea_phy_dropped)
-    print(len(new_fea_img), len(new_fea_phy))
-    # new_fea_phy.to_csv('fea_phy_final.csv', index=False)
-    # new_fea_img.to_csv('fea_au_final.csv', index=False)
-    numeric_labels_df = pd.DataFrame(numeric_labels_phy)
-    #numeric_labels_df.to_csv('labels_final.csv', index=False)
-
-'''
-
 
 def feature_names_add(image):
     if image == 'ir':
         name = ['mean', 'var', 'skew']
         prefixes = ['red1', 'green1', 'blue1', 'red2', 'green2', 'blue2', 'red3', 'green3', 'blue3']
-    else:
-        name = ['mean', 'median', 'max', 'min', 'var', 'std']
+    elif image == "img":
+        name = ['mean', 'median', 'max', 'min', 'var']
         prefixes = ['hog1', 'lbp1', 'hog2', 'lbp2', 'hog3', 'lbp3']
 
     feature_names = list(itertools.chain(*[[f"{prefix}_{n}" for n in name] for prefix in prefixes]))
 
     return feature_names
 
-print(len(feature_names_add(image="aa")))
 
-def feature_standarlization(feature_arr):
-    scaler = StandardScaler()
-    standardized_features = scaler.fit_transform(feature_arr)
-    return standardized_features
-
-
-def pca(data):
-    pca = PCA(n_components=0.95)
-    scaled_features = feature_standarlization(data)
-    reduced_features = pca.fit_transform(scaled_features)
-    print(reduced_features.shape)
-    return reduced_features
+def load_and_preprocess_feature(file_name, folder_path, feature_type):
+    feature_path = os.path.join(folder_path, file_name)
+    df = pd.read_csv(feature_path).fillna(0)
+    if feature_type in ['ir', 'img']:
+        df.columns = feature_names_add(image=feature_type)
+    elif feature_type == 'au':
+        df.columns = ["AU6", "AU10", "AU12", "AU14", "AU17"]
+    return df
 
 
-def xgboost(features, labels):
-    X_train, X_test, y_train, y_test = train_test_split(features, labels, random_state=42, test_size=0.2)
+def process_labels(label_path):
+    df_labels = pd.read_csv(label_path)
+    label_encoder = LabelEncoder()
+    df_labels['encoded'] = label_encoder.fit_transform(df_labels.iloc[:, 1].values.ravel())
+    return df_labels['encoded']
+
+
+def feature_combination(fea1, fea2):
+    fea_concentrate = pd.concat([fea1, fea2], axis=1)
+    return fea_concentrate
+
+
+def train_test_split_by_label(df_features, df_labels, test_size=0.2):
+    unique_labels = df_labels['F'].drop_duplicates()
+    X_train, X_test = train_test_split(unique_labels, random_state=24, test_size=test_size)
+    indices_train = df_labels[df_labels['F'].isin(X_train)].index
+    indices_test = df_labels[df_labels['F'].isin(X_test)].index
+    return df_features.iloc[indices_train], df_features.iloc[indices_test], df_labels['encoded'].iloc[indices_train], \
+           df_labels['encoded'].iloc[indices_test]
+
+
+def select_important_features(X_train, y_train):
     model = xgb.XGBClassifier()
     model.fit(X_train, y_train)
-    feature_importance = model.feature_importances_
-    N = 40  # int(0.1 * len(feature_importance))
-    important_feature_indices = feature_importance.argsort()[-N:][::-1]
+    feature_importances = model.feature_importances_
+    length = len(X_train.columns)
+    if 6 < length < 50:
+        num_features = int(0.5 * len(feature_importances))
+    elif length == 5:
+        num_features = len(feature_importances)
+    else:
+        num_features = int(0.1 * len(feature_importances))
+    important_feature_indices = np.argsort(feature_importances)[-num_features:][::-1]
+    return important_feature_indices, feature_importances
+
+
+def classify_with_selected_features(X_train, X_test, y_train, y_test, important_feature_indices):
+    # Select important features for training and testing datasets
     X_train_important = X_train.iloc[:, important_feature_indices]
     X_test_important = X_test.iloc[:, important_feature_indices]
 
-    important_features_model = RandomForestClassifier(random_state=42)  # svm.NuSVC(gamma="auto")
-    important_features_model.fit(X_train_important, y_train)
-    important_features_predictions = important_features_model.predict(X_test_important)
+    # Train classifier using the selected features
+    classifier = RandomForestClassifier(random_state=42)
+    classifier.fit(X_train_important, y_train)
 
-    classification_rep = classification_report(y_test, important_features_predictions)
-    print(f'Classification Report:\n{classification_rep}')
-    return feature_importance, important_feature_indices
-
-
-def cross_validation(features, labels):
-    _model = RandomForestClassifier(random_state=42)  # svm.NuSVC(gamma="auto")
-    scores = cross_val_score(_model, features, labels, cv=5)
-    print("Accuracy scores for each fold:", scores)
-    print("Mean cross-validation score:", scores.mean())
+    # Predict and evaluate
+    predictions = classifier.predict(X_test_important)
+    return classification_report(y_test, predictions)
 
 
-def feature_importance_plot(fea, labels, feature_names):
-
-    feature_imp, sorted_idx = xgboost(fea, labels)
-    # sorted_idx = np.argsort(feature_imp)[::-1]  # Get the indices that would sort the array
+def feature_importance_plot(X_train, y_train):
+    sorted_idx, feature_imp = select_important_features(X_train, y_train)
+    feature_names = X_train.columns
     sorted_feature_importances = np.array(feature_imp)[sorted_idx]
     sorted_feature_names = np.array(feature_names)[sorted_idx]
 
@@ -190,27 +115,80 @@ def feature_importance_plot(fea, labels, feature_names):
     plt.show()
 
 
-def fea_comb():
-    fea_phy = pd.read_csv('features_phy_final.csv')
-    fea_ir = pd.read_csv('features_ir_final.csv')
-    fea_au = pd.read_csv('features_au_final.csv')
-    labels = pd.read_csv('labels_final.csv').iloc[:, 1:]
-    fea_ir_new = fea_ir.fillna(0)
-    label_encoder = LabelEncoder()
-    num_labels = label_encoder.fit_transform(labels)
-    fea_bp = fea_phy.filter(regex='BP Dia_mmHg|BP_mmHg')
-    fea_res = fea_phy.filter(regex='Resp_Volts| Respiration Rate_BPM')
-    fea_hr = fea_phy.filter(regex='Pulse Rate_BPM')
-    fea_eda = fea_phy.filter(regex='EDA_microsiemens')
-    fea_ir_new.columns = feature_names_add(image='ir')
-    fea_concentrate = pd.concat([fea_phy, fea_au], axis=1)
-    return fea_ir_new, num_labels
+def result(features):
+    label_path = r'C:\Users\YChen\PycharmProjects\pythonProject\2sw\labels_final.csv'
+    df_labels = process_labels(label_path)
+    X_train, X_test, y_train, y_test = train_test_split(features, df_labels, test_size=0.2)
+
+    important_feature_indices, _ = select_important_features(X_train, y_train)
+
+    classification_rep = classify_with_selected_features(X_train, X_test, y_train, y_test, important_feature_indices)
+
+    print(f'Classification Report:\n{classification_rep}')
+    # feature_importance_plot(X_train, y_train)
 
 
-def result(df, labels):
-    feature_importance_plot(df, labels, df.columns)
+def single_features_generator(sensor_name):
+    folder_path = r'C:\Users\YChen\PycharmProjects\pythonProject\2sw'
+    sensor = sensor_name
+    fea_file_name = 'features_' + sensor + '_final.csv'
+    features = load_and_preprocess_feature(fea_file_name, folder_path, sensor)
+    return features
 
 
-df, labels = fea_comb()
-#result(df, labels)
+def combine_datasets(*datasets):
+    combined_dataset = None
 
+    for dataset in datasets:
+        if combined_dataset is None:
+            combined_dataset = dataset
+        else:
+            combined_dataset = feature_combination(combined_dataset, dataset)
+
+    return combined_dataset
+
+
+def phy_select(fea):
+    fea_bp = fea.filter(regex='BP Dia_mmHg|BP_mmHg')
+    fea_res = fea.filter(regex='Resp_Volts| Respiration Rate_BPM')
+    fea_hr = fea.filter(regex='Pulse Rate_BPM')
+    fea_eda = fea.filter(regex='EDA_microsiemens')
+    return fea_bp, fea_res, fea_hr, fea_eda
+
+
+
+
+
+def cross_validation(features):
+    label_path = r'C:\Users\YChen\PycharmProjects\pythonProject\2sw\labels_final.csv'
+    labels = process_labels(label_path)
+    kf = KFold(n_splits=10, shuffle=True, random_state=42)
+    scores = []
+
+    for train_index, test_index in kf.split(features):
+        X_train, X_test = features.iloc[train_index], features.iloc[test_index]
+        y_train, y_test = labels.iloc[train_index], labels.iloc[test_index]
+
+        important_feature_indices, _ = select_important_features(X_train, y_train)
+
+        X_train_important = X_train.iloc[:, important_feature_indices]
+        X_test_important = X_test.iloc[:, important_feature_indices]
+
+        model = RandomForestClassifier(random_state=42)
+        model.fit(X_train_important, y_train)
+        predictions = model.predict(X_test_important)
+        score = accuracy_score(y_test, predictions)
+        scores.append(score)
+
+    print("Accuracy scores for each fold:", scores)
+    print("Mean cross-validation score:", np.mean(scores))
+
+
+phy = single_features_generator(sensor_name='phy')
+bp, res, hr, eda = phy_select(phy)
+ir = single_features_generator(sensor_name='ir')
+img = single_features_generator(sensor_name='img')
+au = single_features_generator(sensor_name='au')
+features_combines = combine_datasets(res,  ir, img, eda)
+cross_validation(features_combines)
+# result(features_combines)

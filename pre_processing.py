@@ -257,22 +257,22 @@ class PreProcessing:
         if len(arr) < 2:  # No need to split if the array is too short
             return [arr]
 
-        sequences = []  # List to hold the result sequences
-        current_sequence = [arr[0]]  # Start the first sequence with the first element
+        sequences = []
+        current_sequence = [arr[0]]
 
         for i in range(1, len(arr)):
             if len(current_sequence) >= 2:
-                # Check if the current element continues the arithmetic sequence
+
                 if arr[i] - current_sequence[-1] == current_sequence[1] - current_sequence[0]:
                     current_sequence.append(arr[i])
                 else:
-                    # If not, add the current sequence to the list and start a new sequence
+
                     sequences.append(current_sequence)
                     current_sequence = [arr[i]]
             else:
                 current_sequence.append(arr[i])
 
-        # Add the last sequence to the list if not empty
+
         if current_sequence:
             sequences.append(current_sequence)
 
