@@ -10,7 +10,7 @@ from scipy.io import loadmat
 import itertools
 from PIL import Image
 import re
-from scipy.signal import medfilt
+from scipy.signal import medfilt, savgol_filter
 from skimage import io as skio, color
 import cv2
 import matplotlib.gridspec as gridspec
@@ -69,10 +69,12 @@ class PreProcessing:
     def split_in_windows(self, window_size, overlap=0):
         signals = self.select_physiology_signal()
         windows = []
+        polyorder = 3
         for signal_ in signals:
             if signal_:
-                flatten_signal = medfilt(signal_)
-                w = tsfel.signal_window_splitter(signal=flatten_signal, window_size=window_size, overlap=overlap)
+                filtered = savgol_filter(signal_, window_size, polyorder=polyorder)
+                w = tsfel.signal_window_splitter(signal=filtered, window_size=window_size, overlap=overlap)
+
                 windows.append(w)
         windows_arr = np.array(windows)
         windows_arr = windows_arr.transpose(1, 2, 0)
@@ -117,18 +119,7 @@ class PreProcessing:
             return []
 
     def frames_from_au(self):
-        """
-        Extracts and merges the second column of Action Unit (AU) data from multiple files,
-        corresponding to a given subject and task. Places the first column (which is the same
-        across all files) as the first column in the final array.
 
-        Parameters:
-        subject (str): The subject identifier.
-        task (str): The task identifier.
-
-        Returns:
-        numpy.ndarray: An array containing the merged AU data.
-        """
         path = r'X:\PPGI\BP4D+_v0.2\AUCoding\AU_INT'
         dir_list = os.listdir(path)
         name = f'{self.subject}_{self.task}_'
@@ -231,12 +222,10 @@ class PreProcessing:
             third_elements.append(array[1][2])
             size.append(array[0][0])
 
-        # Convert lists to NumPy arrays if you want to perform array operations
         first_elements = np.array(first_elements)
         second_elements = np.array(second_elements)
         third_elements = np.array(third_elements)
 
-        # Plot the lines using matplotlib
         plt.figure()
 
         # Plot each set of elements. The x-values are just the index of each element.
@@ -272,7 +261,6 @@ class PreProcessing:
             else:
                 current_sequence.append(arr[i])
 
-
         if current_sequence:
             sequences.append(current_sequence)
 
@@ -292,7 +280,7 @@ class PreProcessing:
         signal_names = ['BP Dia_mmHg', 'BP_mmHg', 'EDA_microsiemens', 'LA Mean BP_mmHg',
                         'LA Systolic BP_mmHg', 'Pulse Rate_BPM', 'Resp_Volts', 'Respiration Rate_BPM']
 
-        head_positions = self.read_feature_head_positions() #"X:\PPGI\BP4D+_v0.2\Physiology\F001\T1\BP Dia_mmHg.txt"
+        head_positions = self.read_feature_head_positions()  # "X:\PPGI\BP4D+_v0.2\Physiology\F001\T1\BP Dia_mmHg.txt"
         frames = []
         for a in head_positions:
             m = (a[0][0][0] / int(fps)) * int(sample)
@@ -333,7 +321,7 @@ def generate():
         for task in tasks:
             try:
                 dataProcessor = PreProcessing(subject_id, task)
-                sequence = dataProcessor.split_in_windows(window_size=1000)
+                sequence = dataProcessor.split_in_windows(window_size=3000)
                 task_sequence.append(sequence)
                 all_task_labels.extend([task] * len(sequence))
             except Exception as e:
@@ -353,5 +341,3 @@ def generate():
 
     flatten_labels = flatten_label(labels)
     return x_data, flatten_labels
-
-

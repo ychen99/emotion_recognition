@@ -35,11 +35,11 @@ def feature_extraction_phy():
     features = tsfel.time_series_features_extractor(cfg_file, phys, header_names=names, fs=1000)
 
     df_data = pd.DataFrame(features)
-    df_data.to_csv('features_phy_1s.csv', index=False)
+    df_data.to_csv('features_phy_3s.csv', index=False)
     df_label = pd.DataFrame(labels)
-    df_label.to_csv('labels_phy_1s.csv', index=False)
+    df_label.to_csv('labels_phy_3s.csv', index=False)
 
-
+feature_extraction_phy()
 
 def split_subject_train_test(subjects):
     train, test = np.random.rand(subjects)
@@ -419,10 +419,12 @@ def generate_img_features():
 
     df_data = pd.DataFrame(features_list)
     df_label = pd.DataFrame(labels)
-    df_data.to_csv('features_img.csv', index=False)
-    df_label.to_csv('labels_img.csv', index=False)
+    df_data.to_csv('features_1s_img.csv', index=False)
+    df_label.to_csv('labels_1s_img.csv', index=False)
 
-generate_img_features()
+
+
+
 
 def flatten_label(data_dict):
     flattened_list = []
@@ -455,13 +457,12 @@ def aus_extractor():
 
     au_features_list = list(itertools.chain(*au_features))
     flattened_labels = flatten_label(labels)
-    print("aus",len(flattened_labels), len(au_features_list))
+    print("aus", len(flattened_labels), len(au_features_list))
 
     df_data = pd.DataFrame(au_features_list)
     df_label = pd.DataFrame(flattened_labels)
     df_data.to_csv('features_au_1s.csv', index=False)
     df_label.to_csv('labels_au_1s.csv', index=False)
-
 
 
 def process_txt_file_simple(file_path):
@@ -608,8 +609,7 @@ def thermol_features_generator():
             labels[subject_id] = labels.get(subject_id, []) + [task] * len(averaged_features)
 
     flattened_labels = flatten_label(labels)
-    print('ir: ',len(flattened_labels), len(features_list), len(features_list[0]))
-
+    print('ir: ', len(flattened_labels), len(features_list), len(features_list[0]))
 
     df_data = pd.DataFrame(features_list)
     df_label = pd.DataFrame(flattened_labels)
@@ -618,4 +618,3 @@ def thermol_features_generator():
 
 
 
-aus_extractor()
