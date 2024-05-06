@@ -58,7 +58,7 @@ def train_test_split_by_label(df_features, df_labels, test_size=0.2):
     indices_train = df_labels[df_labels['F'].isin(X_train)].index
     indices_test = df_labels[df_labels['F'].isin(X_test)].index
     return df_features.iloc[indices_train], df_features.iloc[indices_test], df_labels['encoded'].iloc[indices_train], \
-        df_labels['encoded'].iloc[indices_test]
+           df_labels['encoded'].iloc[indices_test]
 
 
 def select_important_features(X_train, y_train):
@@ -241,18 +241,6 @@ def cross_cl_mutli_plot(df_melted):
     plt.show()
 
 
-phy = single_features_generator(sensor_name='phy')
-bp, res, hr, eda = phy_select(phy)
-ir = single_features_generator(sensor_name='ir')
-img = single_features_generator(sensor_name='img')
-au = single_features_generator(sensor_name='au')
-
-
-features_combines = combine_datasets(ir, img,eda)
-# cv_scores = cross_validation(features_combines)
-result(features_combines)
-
-
 def prepare_cv_data_for_plotting_with_names(cv_names, *cv_results):
     if len(cv_names) != len(cv_results):
         raise ValueError("The number of dataset names must match the number of CV result sets.")
@@ -265,16 +253,13 @@ def prepare_cv_data_for_plotting_with_names(cv_names, *cv_results):
     return df_melted
 
 
-def plot_cv():
+def plot_cv(ir, img, eda, au):
     cv_1 = cross_validation(combine_datasets(ir, img, eda))
     cv_2 = cross_validation(combine_datasets(ir, img, au))
-    cv_3 = cross_validation(combine_datasets(ir, img,eda, au))
-    #cv_4 = cross_validation(combine_datasets(ir, hr))
-    #cv_5 = cross_validation(combine_datasets(ir, img))
-    #cv_6 = cross_validation(combine_datasets(ir, au))
+    cv_3 = cross_validation(combine_datasets(ir, img, eda, au))
+    # cv_4 = cross_validation(combine_datasets(ir, hr))
+    # cv_5 = cross_validation(combine_datasets(ir, img))
+    # cv_6 = cross_validation(combine_datasets(ir, au))
     # ['IR+Image+EDA','IR+Image+AUs','IR+Image+EDA+AUs'] ['IR+Image+Blood pressure','IR+EDA','IR+Respiration', 'IR+Heart rate', 'IR+Image', 'IR+AUs']
-    data_names = ['IR+Image+EDA','IR+Image+AUs','IR+Image+EDA+AUs']
+    data_names = ['IR+Image+EDA', 'IR+Image+AUs', 'IR+Image+EDA+AUs']
     cross_cl_mutli_plot(prepare_cv_data_for_plotting_with_names(data_names, cv_1, cv_2, cv_3))
-
-
-# plot_cv()

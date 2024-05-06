@@ -280,7 +280,7 @@ class PreProcessing:
         signal_names = ['BP Dia_mmHg', 'BP_mmHg', 'EDA_microsiemens', 'LA Mean BP_mmHg',
                         'LA Systolic BP_mmHg', 'Pulse Rate_BPM', 'Resp_Volts', 'Respiration Rate_BPM']
 
-        head_positions = self.read_feature_head_positions()  # "X:\PPGI\BP4D+_v0.2\Physiology\F001\T1\BP Dia_mmHg.txt"
+        head_positions = self.read_feature_head_positions()
         frames = []
         for a in head_positions:
             m = (a[0][0][0] / int(fps)) * int(sample)
